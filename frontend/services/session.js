@@ -1,6 +1,6 @@
 'use strict';
 
-angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage', '$location', '$http', function($rootScope, $sessionStorage, $location, $http){
+angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage', '$location', '$http', '$timeout', function($rootScope, $sessionStorage, $location, $http, $timeout){
 	var service = {};
 
 	service.login = function(username, password){
@@ -8,6 +8,9 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 			success(function(data, status, headers, config) {
 			$rootScope.currentUser = data;
 			$location.path('/');
+			$timeout(function(){
+				$rootScope.$apply();
+			});
 			}).
 			error(function(data, status, headers, config) {
 			});
@@ -19,6 +22,9 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 		}
 		$http.delete('/auth/session/');
 		$location.path('/login');
+		$timeout(function(){
+			$rootScope.$apply();
+		});
 	};
 
 	service.register = function(user, email, pass){
@@ -26,6 +32,9 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 			success(function(data, status, headers, config) {
 			$rootScope.currentUser = data;
 			$location.path('/');
+			$timeout(function(){
+				$rootScope.$apply();
+			});
 			}).
 			error(function(data, status, headers, config) {
 			});
@@ -38,7 +47,10 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 			})
 			.error(function(error, status, headers, config) {
 			  $location.path('/login');
-			  console.log(error)
+			  $timeout(function(){
+				$rootScope.$apply();
+			  });
+			  console.log(error);
 			});
 	};
 

@@ -26,7 +26,7 @@ router.get('/api/v1/partials/:partial', function (req, res){
    if(req.isAuthenticated()){
       res.render('./partials/'+partial+'.jade');
    } else {
-      res.render('./login.jade');
+      res.render('./partials/login.jade');
    }
 });
 
