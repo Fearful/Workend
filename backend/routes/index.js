@@ -29,7 +29,7 @@ router.get('/api/v1/partials/:partial', function (req, res){
       res.render('./partials/login.jade');
    }
 });
-
+var fs = require('../controllers/fs');
 // User Routes
 var Users = require('../controllers/users');
 router.post('/auth/users', Users.create);

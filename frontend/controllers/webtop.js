@@ -1,6 +1,6 @@
 'use strict';
 
-angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession){
+angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', '$mdDialog', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession, $mdDialog){
 	$scope.toggleSidebar = function(){
 		$mdSidenav('right').toggle();
 	};
@@ -16,4 +16,16 @@ angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBott
 	$scope.logout = function(){
 		WEsession.logout();
 	};
+	$scope.projects = function(e){
+		$mdDialog.show({
+	      controller: 'projectsDialog',
+	      templateUrl: '/api/v1/partials/projectsDialog',
+	      targetEvent: e,
+	    });
+	};
+	$timeout(function(){
+		if($scope.$root.currentUser){
+			$mdSidenav('right').open();
+		}
+	},1000);
 }]);

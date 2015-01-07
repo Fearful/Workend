@@ -1,6 +1,6 @@
 'use strict';
 
-angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage', '$location', '$http', '$timeout', function($rootScope, $sessionStorage, $location, $http, $timeout){
+angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage', '$location', '$http', '$timeout', '$mdToast', function($rootScope, $sessionStorage, $location, $http, $timeout, $mdToast){
 	var service = {};
 
 	service.login = function(username, password){
@@ -10,9 +10,11 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 			$location.path('/');
 			$timeout(function(){
 				$rootScope.$apply();
+				$mdToast.show($mdToast.simple().content('Login successfully!'));
 			});
 			}).
 			error(function(data, status, headers, config) {
+				$mdToast.show($mdToast.simple().content(data.message));
 			});
 	};
 
@@ -24,7 +26,8 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 		$location.path('/login');
 		$timeout(function(){
 			$rootScope.$apply();
-		});
+			$mdToast.show($mdToast.simple().content('Logout successfully!'));
+		}, 0);
 	};
 
 	service.register = function(user, email, pass){
@@ -34,9 +37,11 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 			$location.path('/');
 			$timeout(function(){
 				$rootScope.$apply();
-			});
+				$mdToast.show($mdToast.simple().content('Registration complete!'));
+			}, 0);
 			}).
 			error(function(data, status, headers, config) {
+				$mdToast.show($mdToast.simple().content(data.message));
 			});
 	};
 
@@ -44,13 +49,14 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 		$http.get('/auth/session/')
 			.success(function (response, status, headers, config) {
 				$sessionStorage.currentUser = response;
+				$mdToast.show($mdToast.simple().content('Welcome back ' + response.username + '!'));
 			})
 			.error(function(error, status, headers, config) {
 			  $location.path('/login');
 			  $timeout(function(){
 				$rootScope.$apply();
-			  });
-			  console.log(error);
+				$mdToast.show($mdToast.simple().content('Error while checking your user!'));
+			  }, 0);
 			});
 	};
 
