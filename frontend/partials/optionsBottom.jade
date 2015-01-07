@@ -1,0 +1,7 @@
+md-bottom-sheet.md-grid
+  md-list
+    md-item(ng-repeat='item in items')
+      md-button.md-grid-item-content(aria-label='{{item.name}}', ng-click='listItemClick($index)')
+        div.md-icon-container
+          md-inline-grid-icon(icon='{{item.icon}}')
+        p.md-grid-text  {{ item.name }}

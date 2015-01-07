@@ -1,0 +1,34 @@
+block content
+  div
+    .login
+        md-tabs.md-accent(md-selected='data.selectedIndex')
+          md-tab#login(aria-controls='login-content')  Login 
+          |       
+          md-tab#register(aria-controls='register-content')  Register 
+        |     
+        ng-switch.tabpanel-container(on='data.selectedIndex')
+          #login-content(role='tabpanel', aria-labelledby='login', ng-switch-when='0', md-swipe-left='next()', md-swipe-right='previous()')
+            md-content
+              form(style='padding: 20px;')
+                .row
+                  md-text-float(label='Username', ng-model='$root.username')
+                  |               
+                  md-text-float(label='Password', ng-model='$root.password', type='password')
+                |             
+                md-button.md-raised.md-primary(ng-click='login()', aria-labelledby='Login')
+                  | Login 
+                  md-button
+          |       
+          #register-content(role='tabpanel', aria-labelledby='register', ng-switch-when='1', md-swipe-left='next()', md-swipe-right='previous()')
+            md-content
+              form(style='padding: 20px;')
+                .row
+                  md-text-float(label='Username', ng-model='$root.username')
+                  |               
+                  md-text-float(label='Email', ng-model='$root.email')
+                  |               
+                  md-text-float(label='Password', ng-model='$root.password', type='password')
+                |             
+                md-button.md-raised.md-primary(ng-click='register()', aria-labelledby='Register')
+                  | Register 
+                  md-button
