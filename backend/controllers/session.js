@@ -4,6 +4,10 @@ var mongoose = require('mongoose'),
     passport = require('passport');
 
 exports.session = function (req, res) {
+    if(!req.user){
+        res.sendStatus(400, 'Not logged in');
+        return;
+    }
     res.json(req.user.user_info);
 };
 exports.logout = function (req, res) {

@@ -5,11 +5,17 @@ angular.module('workend', [
   'ngMaterial',
   'ngRoute',
   'ngStorage'
-]).run(['$rootScope', '$http', 'WEsession', '$sessionStorage', function ($rootScope, $http, WEsession, $sessionStorage) {
+]).run(['$rootScope', '$http', 'WEsession', '$sessionStorage', '$location', '$mdToast', function ($rootScope, $http, WEsession, $sessionStorage, $location, $mdToast) {
     $rootScope.$watch('currentUser', function(currentUser) {
       $rootScope.currentUser = $sessionStorage.currentUser ? $sessionStorage.currentUser : $rootScope.currentUser;
-      if (!$rootScope.currentUser) {
-          WEsession.checkUser();
+      if (!$rootScope.currentUser && $location.path() !== '/login') {
+          WEsession.checkUser(function(response){
+            $rootScope.userLoaded = true;
+            $mdToast.show($mdToast.simple().content('Welcome back ' + response.username + '!'));
+          });
+      } else if($location.path() !== '/login'){
+        $rootScope.userLoaded = true;
+        $mdToast.show($mdToast.simple().content('Welcome back ' + $rootScope.currentUser.username + '!'));
       }
     });
 
@@ -31,7 +37,6 @@ angular.module('workend', [
         templateUrl: '/api/v1/partials/login',
         controller: 'login'
       })
-      //===== mean-cli hook =====//
       .otherwise({
         redirectTo: '/'
       });

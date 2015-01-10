@@ -1,7 +1,27 @@
 md-dialog(aria-label='Manage Projects')
     md-content
-      md-subheader.md-sticky-no-effect Manage Projects   
+      md-subheader.md-sticky-no-effect Manage Projects
+      .md-content
+        div.loadingFiles(layout='row', layout-align='center center' ng-hide='dirloaded')
+          md-progress-circular(md-mode='indeterminate')
+        md-tabs.md-accent(md-selected='data.selectedIndex')
+          md-tab#new(aria-controls='new-content')  New 
+          md-tab#open(aria-controls='open-content')  Open
+          md-tab#clone(aria-controls='clone-content')  Clone 
+        ng-switch.tabpanel-container(on='data.selectedIndex')
+          #new-content(role='tabpanel', aria-labelledby='New Project', ng-switch-when='0', md-swipe-left='next()', md-swipe-right='previous()')
+            md-content
+              ul.directory
+                li(ng-dblclick='open($event)') ..
+                li(ng-repeat='item in currentContent', ng-click='select($event, item)', ng-dblclick='open($event, item)', ng-class='{ active: selectedFolder === item }') {{ item }}
+          #open-content(role='tabpanel', aria-labelledby='Open Project', ng-switch-when='1', md-swipe-left='next()', md-swipe-right='previous()')
+            md-content
+              ul.directory
+                li(ng-dblclick='open($event)') ..
+                li(ng-repeat='item in currentContent', ng-click='select($event, item)', ng-dblclick='open($event, item)', ng-class='{ active: selectedFolder === item }') {{ item }}
+          #clone-content(role='tabpanel', aria-labelledby='Clone Project', ng-switch-when='2', md-swipe-left='next()', md-swipe-right='previous()')
+            md-content
       .md-actions(layout='row')
         span(flex='')
-        md-button(ng-click='') Cancel
-        md-button.md-primary(ng-click='') Open
+        md-button(ng-click='close()') Cancel
+        md-button.md-primary(ng-click='selectProject()') Open

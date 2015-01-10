@@ -21,7 +21,12 @@ function getUserHome() {
 }
 
 module.exports = {
-	getUserHome: function(){
-		return getDirectories(getUserHome());
-	}
+	getDirs: function (req, res, next) {
+      var path = req.params.path;
+      if(path){
+        res.json(path);
+      } else {
+        res.json(getDirectories(getUserHome()));
+      }
+  }
 }

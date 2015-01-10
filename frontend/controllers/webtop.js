@@ -1,31 +1,53 @@
 'use strict';
 
-angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', '$mdDialog', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession, $mdDialog){
+angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', '$mdDialog', '$http', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession, $mdDialog, $http){
 	$scope.toggleSidebar = function(){
-		$mdSidenav('right').toggle();
+		$mdSidenav('left').toggle();
 	};
 	$window.document.oncontextmenu = function(e){
 		e.stopPropagation();
 		e.preventDefault();
+		if($mdSidenav('left').isOpen()){
+			$mdDialog.hide();
+			$mdSidenav('left').toggle();
+		}
 	    $mdBottomSheet.show({
 	      templateUrl: '/api/v1/partials/optionsBottom',
 	      controller: 'WEshortcuts',
 	      targetEvent: e
 	    });
 	};
-	$scope.logout = function(){
+	function logout(){
+		if($mdSidenav('left').isOpen()){
+			$mdSidenav('left').toggle();
+		}
 		WEsession.logout();
 	};
-	$scope.projects = function(e){
+	// $http.get('/api/v1/navigate/').success(function(data){
+	// 	debugger;
+	// });
+	function projects(e){
 		$mdDialog.show({
 	      controller: 'projectsDialog',
 	      templateUrl: '/api/v1/partials/projectsDialog',
-	      targetEvent: e,
+	      targetEvent: e
 	    });
 	};
-	$timeout(function(){
-		if($scope.$root.currentUser){
-			$mdSidenav('right').open();
-		}
-	},1000);
+	function switchProjects(e){
+		$mdDialog.show({
+	      controller: 'projectsListDialog',
+	      templateUrl: '/api/v1/partials/projectsListDialog',
+	      targetEvent: e
+	    });
+	};
+	$scope.options = [{
+		name: 'Add project',
+		action: projects
+	},{
+		name: 'Switch Active Project',
+		action: switchProjects
+	},{
+		name: 'Logout',
+		action: logout
+	}];
 }]);

@@ -2,29 +2,23 @@ extends layout
 
 block content
   div(ng-controller='webtop') 
-     div(layout='column', layout-fill='', tabindex='-1', role='main')
-        div(ng-view='')
-     div(layout='row')
-         md-sidenav.md-sidenav-right(md-component-id='right')
-             md-toolbar.md-default-theme(style='min-height: 64px; max-height:64px;', layout='column')
-               h1.md-toolbar-tools(flex='', layout='column')
-                 a(href='', ng-click='', layout='row', flex='', tabindex='0')
-                   svg(version='1.1', xmlns='http://www.w3.org/2000/svg', xmlns:xlink='http://www.w3.org/1999/xlink', x='0px', y='0px', viewbox='0 0 100 100', enable-background='new 0 0 100 100', xml:space='preserve', style='\
-                   width: 40px; height: 40px;')
-                     path(d='M 50 0 L 100 14 L 92 80 L 50 100 L 8 80 L 0 14 Z', fill='#b2b2b2')
-                     |             
-                     path(d='M 50 5 L 6 18 L 13.5 77 L 50 94 Z', fill='#E42939')
-                     |             
-                     path(d='M 50 5 L 94 18 L 86.5 77 L 50 94 Z', fill='#B72833')
-                     |             
-                     path(d='M 50 7 L 83 75 L 72 75 L 65 59 L 50 59 L 50 50 L 61 50 L 50 26 Z', fill='#b2b2b2')
-                     |             
-                     path(d='M 50 7 L 17 75 L 28 75 L 35 59 L 50 59 L 50 50 L 39 50 L 50 26 Z', fill='#fff')
-                   |           
-                   div(flex='', style='line-height:40px; text-indent: 15px;') Projects
-             |     
-             md-content
-               | TODO
+     div.loading(layout='row', layout-align='center center' ng-hide='userLoaded')
+       md-progress-circular(md-mode='indeterminate')
+     div(ng-view='')
+     md-sidenav.md-sidenav-left(md-component-id='left')
+       md-toolbar.md-default-theme(style='min-height: 64px; max-height:64px;', layout='row' layout-align='start center')
+         md-button.md-toolbar-tools
+          .icon(ng-click='toggleSidebar()')
+           svg(viewbox='0 0 24 24', x='0px', y='0px', version='1.1', xmlns='http://www.w3.org/2000/svg', xmlns:xlink='http://www.w3.org/1999/xlink')
+            g#menu
+              path(d='M3,18h18v-2H3V18z M3,13h18v-2H3V13z M3,6v2h18V6H3z') 
+         span Projects
+       md-content
+         md-list
+           md-item(ng-repeat='item in options')
+             md-item-content
+               md-button.md-tile-content(ng-click='item.action($event)')
+                 h3 {{item.name}}
 block foot
   script(src='lib/angular/angular.js')
   |     
@@ -49,5 +43,7 @@ block foot
   script(src='controllers/WEshortcuts.js')
   |     
   script(src='controllers/projectsDialog.js')
+  |     
+  script(src='controllers/projectsListDialog.js')
   |     
   script(src='services/session.js')
