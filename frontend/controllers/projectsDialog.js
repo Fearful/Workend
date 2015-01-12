@@ -23,6 +23,9 @@ angular.module('workend').controller('projectsDialog', ['$scope', '$mdDialog', '
 	};
 	$scope.selectProject = function(name){
 		$scope.dirloaded = false;
+		if($scope.$root.currentUser){
+			$scope.$root.currentUser.starred = $scope.oldPath + '/' + $scope.selectedFolder;
+		}
 		$http.post('/api/v1/projects/new', { name: $scope.selectedFolder, owner: $scope.$root.currentUser._id, path: $scope.oldPath + '/' + $scope.selectedFolder })
 			.success(function (response, status, headers, config) {
 				$scope.dirloaded = true;

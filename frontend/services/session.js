@@ -6,7 +6,8 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 	service.login = function(username, password){
 		$http.post('/auth/session', { username: username, password: password }).
 			success(function(data, status, headers, config) {
-			$rootScope.currentUser = data;
+			data.user.starred = data.starredProject;
+			$rootScope.currentUser = data.user;
 			$location.path('/');
 			}).
 			error(function(data, status, headers, config) {
@@ -19,7 +20,7 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 			$sessionStorage.$reset();
 		}
 		$http.delete('/auth/session/');
-		$location.path('/login');
+		$rootScope.currentUser = false;
 		$mdToast.show($mdToast.simple().content('Logout successfully!'));
 	};
 
@@ -38,7 +39,8 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 	service.checkUser = function(callback){
 		$http.get('/auth/session/')
 			.success(function (response, status, headers, config) {
-				$sessionStorage.currentUser = response;
+				response.user.starred = response.starred;
+				$sessionStorage.currentUser = response.user;
 				callback(response);
 			})
 			.error(function(error, status, headers, config) {

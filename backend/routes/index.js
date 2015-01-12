@@ -50,6 +50,11 @@ router.get('/api/v1/projects/:projectId', ensureAuthenticated, Projects.read);
 router.put('/api/v1/projects/:projectId', ensureAuthenticated, Projects.update);
 router.delete('/api/v1/projects/:projectId', ensureAuthenticated, Projects.delete);
 
+// Stadistics
+var Stadistics = require('../controllers/codeStadistics.js');
+router.post('/api/v1/statistics', ensureAuthenticated, Stadistics.getStadistics);
+// Stadistics.getStadistics('/Users/fearful/Projects/MSEditorMaking');
+
 module.exports = router;
 
 function ensureAuthenticated(req, res, next) {

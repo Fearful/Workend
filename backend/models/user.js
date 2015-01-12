@@ -20,7 +20,9 @@ var UserSchema = new Schema({
   name: String,
   admin: Boolean,
   guest: Boolean,
-  provider: String
+  provider: String,
+  starred: String,
+  starredId: String
 });
 /**
  * Virtuals

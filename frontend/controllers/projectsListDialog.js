@@ -1,6 +1,6 @@
 'use strict';
 
-angular.module('workend').controller('projectsListDialog', ['$scope', '$mdDialog', '$mdSidenav', '$http', '$location', '$mdToast', function($scope, $mdDialog, $mdSidenav, $http, $location, $mdToast){
+angular.module('workend').controller('projectsListDialog', ['$scope', '$mdDialog', '$mdSidenav', '$http', '$location', '$mdToast', '$timeout', function($scope, $mdDialog, $mdSidenav, $http, $location, $mdToast, $timeout){
 	$scope.projects = [];
 	$scope.selectedProject = '';
 	$scope.open = function(item){
@@ -16,10 +16,11 @@ angular.module('workend').controller('projectsListDialog', ['$scope', '$mdDialog
 		$http.get('/api/v1/projects/' + item._id)
 			.success(function (response, status, headers, config) {
 				$scope.dirloaded = true;
+				$scope.$root.currentUser.starred = response.path;
+				$scope.$root.currentProject = response;
 				$mdToast.show($mdToast.simple().content('Opening Project...'));
 				$mdDialog.hide();
 				$mdSidenav('left').toggle();
-				debugger;
 			})
 			.error(function(error, status, headers, config) {
 			  	$location.path('/login');

@@ -4,7 +4,8 @@
 angular.module('workend', [
   'ngMaterial',
   'ngRoute',
-  'ngStorage'
+  'ngStorage',
+  'tc.chartjs'
 ]).run(['$rootScope', '$http', 'WEsession', '$sessionStorage', '$location', '$mdToast', function ($rootScope, $http, WEsession, $sessionStorage, $location, $mdToast) {
     $rootScope.$watch('currentUser', function(currentUser) {
       $rootScope.currentUser = $sessionStorage.currentUser ? $sessionStorage.currentUser : $rootScope.currentUser;
