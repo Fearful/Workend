@@ -25,6 +25,8 @@
     "passport-github": "^0.1.5",
     "passport-local": "^1.0.0",
     "serve-favicon": "^2.2.0",
-    "underscore": "^1.7.0"
+    "serve-index": "^1.6.0",
+    "underscore": "^1.7.0",
+    "walk": "^2.3.9"
   }
 }

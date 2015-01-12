@@ -6,12 +6,9 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 	service.login = function(username, password){
 		$http.post('/auth/session', { username: username, password: password }).
 			success(function(data, status, headers, config) {
-			$rootScope.currentUser = data;
+			data.user.starred = data.starredProject;
+			$rootScope.currentUser = data.user;
 			$location.path('/');
-			$timeout(function(){
-				$rootScope.$apply();
-				$mdToast.show($mdToast.simple().content('Login successfully!'));
-			});
 			}).
 			error(function(data, status, headers, config) {
 				$mdToast.show($mdToast.simple().content(data.message));
@@ -23,11 +20,8 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 			$sessionStorage.$reset();
 		}
 		$http.delete('/auth/session/');
-		$location.path('/login');
-		$timeout(function(){
-			$rootScope.$apply();
-			$mdToast.show($mdToast.simple().content('Logout successfully!'));
-		}, 0);
+		$rootScope.currentUser = false;
+		$mdToast.show($mdToast.simple().content('Logout successfully!'));
 	};
 
 	service.register = function(user, email, pass){
@@ -35,28 +29,23 @@ angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage',
 			success(function(data, status, headers, config) {
 			$rootScope.currentUser = data;
 			$location.path('/');
-			$timeout(function(){
-				$rootScope.$apply();
-				$mdToast.show($mdToast.simple().content('Registration complete!'));
-			}, 0);
+			$mdToast.show($mdToast.simple().content('Registration complete!'));
 			}).
 			error(function(data, status, headers, config) {
 				$mdToast.show($mdToast.simple().content(data.message));
 			});
 	};
 
-	service.checkUser = function(){
+	service.checkUser = function(callback){
 		$http.get('/auth/session/')
 			.success(function (response, status, headers, config) {
-				$sessionStorage.currentUser = response;
-				$mdToast.show($mdToast.simple().content('Welcome back ' + response.username + '!'));
+				response.user.starred = response.starred;
+				$sessionStorage.currentUser = response.user;
+				callback(response);
 			})
 			.error(function(error, status, headers, config) {
-			  $location.path('/login');
-			  $timeout(function(){
-				$rootScope.$apply();
-				$mdToast.show($mdToast.simple().content('Error while checking your user!'));
-			  }, 0);
+			  	$location.path('/login');
+				$mdToast.show($mdToast.simple().content('Please login or sign up'));
 			});
 	};
 

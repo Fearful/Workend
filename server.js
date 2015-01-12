@@ -1,12 +1,13 @@
-var express = require('express');
-var path = require('path');
-var favicon = require('serve-favicon');
-var logger = require('morgan');
-var cookieParser = require('cookie-parser');
-var bodyParser = require('body-parser');
-var passport = require('passport');
-var session = require('express-session');
-var MongoStore = require('connect-mongo')(session);
+var express = require('express'),
+ path = require('path'),
+ favicon = require('serve-favicon'),
+ logger = require('morgan'),
+ cookieParser = require('cookie-parser'),
+ bodyParser = require('body-parser'),
+ passport = require('passport'),
+ session = require('express-session'),
+ MongoStore = require('connect-mongo')(session),
+ serveIndex = require('serve-index');
 
 var mongoose = require('mongoose');
 mongoose.connect('mongodb://localhost:27017/workend');
@@ -37,9 +38,13 @@ app.use(express.static(path.join(__dirname, 'frontend')));
 
 app.use('/', routes);
 // Angular needs to handle the routing of the application
-app.use('/*', function(req, res){
+app.use('/login', function(req, res){
   res.render('index', { title: 'Workend', user: req.user });
 });
+
+//Serve file system
+app.use('/api/fs', serveIndex(getUserHome(), {'icons': true, 'template': 'backend/templates/files.html', 'view': 'details'}));
+
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
     var err = new Error('Not Found');
@@ -76,5 +81,9 @@ var server = app.listen(5000, function () {
   console.log('Workend app listening on localhost at port', port)
 
 });
+
+function getUserHome() {
+  return process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE;
+}
 
 module.exports = app;

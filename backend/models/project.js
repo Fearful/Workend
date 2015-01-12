@@ -7,7 +7,9 @@ var projectSchema = new Schema({
     description: {type: String, default: ''},
     mainFile: {type: String, default: ''},
     version: {type: String, default: '0.0.0'},
-    name: {type: String, default: ''}
+    name: {type: String, default: ''},
+    owner: {type: String},
+    path: {type: String}
 });
  
-module.exports = mongoose.model('Project', projectSchema);
+module.exports = mongoose.model('Project', projectSchema, 'projects');

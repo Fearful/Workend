@@ -4,7 +4,11 @@ var mongoose = require('mongoose'),
     passport = require('passport');
 
 exports.session = function (req, res) {
-    res.json(req.user.user_info);
+    if(!req.user){
+        res.sendStatus(400, 'Not logged in');
+        return;
+    }
+    res.json({ user: req.user.user_info, starred: req.user.starred });
 };
 exports.logout = function (req, res) {
     if (req.user) {
@@ -24,7 +28,7 @@ exports.login = function (req, res, next) {
             if (err) {
                 return res.send(err);
             }
-            res.json(req.user.user_info);
+            res.json({ user: req.user.user_info, starredProject: req.user.starred });
         });
     })(req, res, next);
 }
