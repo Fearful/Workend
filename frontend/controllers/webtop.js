@@ -1,6 +1,6 @@
 'use strict';
 
-angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', '$mdDialog', '$http', '$location', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession, $mdDialog, $http, $location){
+angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', '$mdDialog', '$http', '$location', '$mdToast', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession, $mdDialog, $http, $location, $mdToast){
 	$scope.toggleSidebar = function(){
 		$mdSidenav('left').toggle();
 	};
@@ -100,6 +100,16 @@ angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBott
 		var index = 0;
 		$http.post('/api/v1/statistics', { path: path })
 		.success(function (response, status, headers, config) {
+			if(response.package){
+				$scope.package = JSON.parse(response.package)
+			} else {
+				$scope.package = false
+			}
+			if(response.tasks){
+				$scope.$root.tasks = response.tasks;
+			} else {
+				$scope.$root.tasks = false;
+			}
 			$scope.fileData = []
 			$scope.countData = [];
 			angular.forEach(response.fileCount, function(file){
@@ -137,4 +147,21 @@ angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBott
 			// $mdToast.show($mdToast.simple().content('Please login or sign up'));
 		});
 	};
+	$scope.$root.runTask = function(index){
+		var task = $scope.$root.tasks[index];
+		$http.post('/api/v1/tasks', { task: task.name, framework: task.icon, pathToProject: $scope.$root.currentUser.starred })
+		.success(function (response, status, headers, config) {
+			debugger;
+		})
+		.error(function(error, status, headers, config) {
+		 //  	$location.path('/login');
+			// $mdToast.show($mdToast.simple().content('Please login or sign up'));
+		});
+		$mdToast.show({
+		  controller: 'taskRunToaster',
+		  templateUrl: '/api/v1/partials/taskRunToaster',
+		  hideDelay: 6000,
+		  position: 'top right'
+		});
+	}
 }]);

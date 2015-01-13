@@ -9,3 +9,9 @@ Workend, aims to fill the gap between developers and the command prompt. It offe
 
 #### Previewing code statistics
 http://screencast.com/t/jWtnxAvlk
+
+#### Viewing project's tasks (grunt or gulp) with right-click
+http://screencast.com/t/WuUC0CfsLL
+
+#### Executing tasks on workend
+http://screencast.com/t/DYRXbtUt

@@ -73,6 +73,47 @@ exports.getStadistics = function(req, res, next){
 	if(fs.existsSync(path + '/package.json')){
 		var pkg = fs.readFileSync(path + '/package.json', {encoding: 'utf8'});
 	}
+	if(!pkg){
+		res.sendStatus(400, 'No package.json Found');
+	}
+	if(fs.existsSync(path + '/gulpfile.js')){
+		var gulp = fs.readFileSync(path + '/gulpfile.js', {encoding: 'utf8'});
+		if(gulp){
+			var tasks = [];
+			while(gulp.indexOf('gulp.task(') !== -1){
+				var index = gulp.indexOf('gulp.task(');
+				var substring = gulp.substr(index + 11);
+				var singleQuote = substring.indexOf("'");
+				var doubleQuote = substring.indexOf('"');
+				if(singleQuote != -1 && (singleQuote < doubleQuote || doubleQuote === -1)){
+					tasks.push({ name: substring.substr(0, singleQuote), icon: 'gulp' })
+					gulp = gulp.substr(index + singleQuote);
+				} else if(doubleQuote != -1 && (doubleQuote < singleQuote || singleQuote === -1)){
+					tasks.push({ name: substring.substr(0, doubleQuote), icon: 'gulp' })
+					gulp = gulp.substr(index + doubleQuote);
+				}
+			}
+		}
+	}
+	if(fs.existsSync(path + '/Gruntfile.js')){
+		var grunt = fs.readFileSync(path + '/Gruntfile.js', {encoding: 'utf8'});
+		if(grunt){
+			var tasks = [];
+			while(grunt.indexOf('grunt.registerTask(') !== -1){
+				var index = grunt.indexOf('grunt.registerTask(');
+				var substring = grunt.substr(index + 20);
+				var singleQuote = substring.indexOf("'");
+				var doubleQuote = substring.indexOf('"');
+				if(singleQuote != -1 && (singleQuote < doubleQuote || doubleQuote === -1)){
+					tasks.push({ name: substring.substr(0, singleQuote), icon: 'grunt' })
+					grunt = grunt.substr(index + singleQuote);
+				} else if(doubleQuote != -1 && (doubleQuote < singleQuote || singleQuote === -1)){
+					tasks.push({ name: substring.substr(0, doubleQuote), icon: 'grunt' })
+					grunt = grunt.substr(index + doubleQuote);
+				}
+			}
+		}
+	}
 	if(fs.existsSync(path + '/.gitignore')){
 			var ignore = fs.readFileSync(path + '/.gitignore', {encoding: 'utf8'});
 		if(ignore){
@@ -85,6 +126,12 @@ exports.getStadistics = function(req, res, next){
 		var results = getAllFiles(path, ignore);
 	} else {
 		var results = getAllFiles(path, [path + '/.git']);
+	}
+	if(pkg){
+		results.package = pkg;
+	}
+	if(gulp || grunt){
+		results.tasks = tasks;
 	}
 	res.send(results);
 };

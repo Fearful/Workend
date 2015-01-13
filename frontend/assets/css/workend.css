@@ -1390,3 +1390,11 @@ margin-left: 2px;
   background-color: #BBB;
   color: #FFF;
 }
+.gulp {
+  width: 50px;
+  content: url('../img/gulp.png');
+}
+.grunt {
+  width: 50px;
+  content: url('../img/grunt.png');
+}

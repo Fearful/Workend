@@ -21,7 +21,7 @@ div(layout="column")
             g#menu
               path(d='M3,18h18v-2H3V18z M3,13h18v-2H3V13z M3,6v2h18V6H3z')  
         .spacer   
-         h3 {{ currentProject.name }}
+         h3 {{ package.name }}
         .icon
           svg(viewbox='0 0 24 24', x='0px', y='0px', version='1.1', xmlns='http://www.w3.org/2000/svg', xmlns:xlink='http://www.w3.org/1999/xlink')
             g#search
@@ -39,6 +39,22 @@ div(layout="column")
       md-card(flex='49')
         h4 Project languages statistics   
         canvas(tc-chartjs-pie, chart-options="chartOptions", chart-data="countData", auto-legend)
+    div(layout="row")
+      md-card(flex='32')
+        h4 Dependencies
+        table(width='100%')
+          tr(ng-repeat='(dep, ver)  in package.dependencies')
+            th {{ dep }}
+            th {{ ver }}
+      md-card(flex='32')
+        h4 Development Dependencies
+        table(width='100%')
+          tr(ng-repeat='(dep, ver)  in package.devDependencies')
+            th {{ dep }}
+            th {{ ver }}
+      md-card(flex='32')
+        h4 Description
+        p {{ package.description }}
     div(layout="row")
       md-card(flex='33')
         h2 Pull Requests 

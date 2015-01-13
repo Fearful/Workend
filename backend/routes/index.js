@@ -53,7 +53,10 @@ router.delete('/api/v1/projects/:projectId', ensureAuthenticated, Projects.delet
 // Stadistics
 var Stadistics = require('../controllers/codeStadistics.js');
 router.post('/api/v1/statistics', ensureAuthenticated, Stadistics.getStadistics);
-// Stadistics.getStadistics('/Users/fearful/Projects/MSEditorMaking');
+
+// Tasks
+var Tasks = require('../controllers/tasks.js');
+router.post('/api/v1/tasks', ensureAuthenticated, Tasks.run);
 
 module.exports = router;
 
