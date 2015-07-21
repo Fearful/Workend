@@ -1,6 +1,6 @@
 'use strict';
 
-angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', '$mdDialog', '$http', '$location', '$mdToast', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession, $mdDialog, $http, $location, $mdToast){
+angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', '$mdDialog', '$http', '$location', '$mdToast', '$route', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession, $mdDialog, $http, $location, $mdToast, $route){
 	$scope.toggleSidebar = function(){
 		$mdSidenav('left').toggle();
 	};

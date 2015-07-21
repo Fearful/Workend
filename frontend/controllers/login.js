@@ -1,6 +1,6 @@
 'use strict';
 
-angular.module('workend').controller('login', ['$window', '$scope', 'WEsession', '$location', function($window, $scope, WEsession, $location){
+angular.module('workend').controller('login', ['$window', '$scope', 'WEsession', '$location', '$route', function($window, $scope, WEsession, $location, $route){
 	$scope.$root.username = '';
 	$scope.$root.email = '';
 	$scope.$root.password = '';
@@ -11,14 +11,17 @@ angular.module('workend').controller('login', ['$window', '$scope', 'WEsession',
 	$scope.register = function(){
 		WEsession.register($scope.$root.username, $scope.$root.email, $scope.$root.password);
 	};
+	$scope.githubLogin = function(){
+		$location.path('/auth/github');
+	};
 	$scope.data = {
-      selectedIndex : 0
+      selectedIndex : 2
     };
     $scope.next = function() {
-      $scope.data.selectedIndex = Math.min($scope.data.selectedIndex + 1, 2) ;
+      $scope.data.selectedIndex = $scope.data.selectedIndex === 2 ? 0 : $scope.data.selectedIndex + 1;
     };
     $scope.previous = function() {
-      $scope.data.selectedIndex = Math.max($scope.data.selectedIndex - 1, 0);
+      $scope.data.selectedIndex = $scope.data.selectedIndex === 0 ? 2 : $scope.data.selectedIndex - 1;
     };
     if($scope.$root.currentUser){
     	$location.path('/');

@@ -1,7 +1,8 @@
    #login-content {
-    background-color: #3F51B5; }
+    background-color: #3F51B5;padding: 4px; }
    #register-content {
-    background-color: #00796B; }
+    background-color: #00796B;
+    padding: 4px; }
    .tabpanel-container {
     display: block;
     position: relative;
@@ -25,8 +26,13 @@
    .tabpanel-container [role="tabpanel"] {
     padding: 20px; }
     .login {
-      width: 400px;
-      margin: 0 auto;
+      width: 100%;
+      background:#222;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
     }
     md-dialog.md-default-theme {
       width: 100%;
@@ -1305,7 +1311,12 @@ margin-left: 2px;
   margin: 2px;
   vertical-align: middle;
 }
-
+#actions .logoAction {
+  padding: 0px;
+  margin: 0px;
+  width: 100%;
+  height: 100%;
+}
 #actions .spacer {
   flex: 1;
 }
@@ -1342,6 +1353,12 @@ margin-left: 2px;
   width: 40px;
   margin: 10px;
   vertical-align: middle;
+}
+.md-toolbar-tools .logoAction {
+  padding: 0px;
+  margin: 0px;
+  width: 100%;
+  height: 100%;
 }
 .loading {
   width: 100%;
@@ -1398,3 +1415,94 @@ margin-left: 2px;
   width: 50px;
   content: url('../img/grunt.png');
 }
+@import url(http://fonts.googleapis.com/css?family=Roboto:100);
+  
+.logoContainer{
+  width:300px;
+  height: 300px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+.login .md-accent {
+  max-width: 500px;
+  margin: 0 auto;
+}
+.login .tabpanel-container {
+  max-width: 500px;
+  margin: 0 auto;
+}
+.logo
+  {position:relative;
+    width:100px;
+    height:100px;
+    margin:50px auto;
+    text-align:center;
+    animation:animate 3s infinite ease;
+  }
+  .icon .logoContainer {
+    width: 100%;
+    height: inherit;
+  }
+.icon .logo {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  animation:animated 3s infinite ease;
+}
+@keyframes animate
+  {0%
+      {width:200px}
+    50%
+      {width:150px}
+    100%
+      {width: 200px}
+    }
+    @keyframes animated
+  {0%
+      {width:20px}
+    50%
+      {width:15px}
+    100%
+      {width: 20px}
+    }
+.logo:before,.logo:after
+  {position:absolute;
+    content:'';
+    width:100px;
+    height:100px;
+    top:50px;
+    transform: rotate(45deg);
+    background:rgba(0,155,255,.05);
+    z-index:0;
+    box-shadow: 0 0 0 1px white, 0 0 10px 1px teal, inset 0 0 10px 1px teal;}
+
+.logo:before{
+  left:35px;
+}
+
+.logo:after{
+  right:35px;
+}
+.icon .logo:after, .icon .logo:before {
+  width: 20px;
+  height: 20px;
+  top: 15px;
+}
+.icon .logo:after{
+  right: 5px;
+}
+.icon .logo:before{
+  left: 5px;
+}
+.logo h1
+  {z-index:100;
+    line-height:200px;
+    font-family:Roboto, Sans-Serif;
+    letter-spacing:5px;
+    font-size:13px;
+    color:rgba(255,255,255,1);
+    text-shadow:0 0 6px rgba(0,255,255,1);}
+    .icon .logo h1 {
+      line-height: 20px;
+      font-size: 0px;
+    }

@@ -2,10 +2,10 @@ div(layout="column")
   md-sidenav.md-sidenav-left(md-component-id='left')
     md-toolbar.md-default-theme(style='min-height: 64px; max-height:64px;', layout='row' layout-align='start center')
       md-button.md-toolbar-tools
-        .icon(ng-click='toggleSidebar()')
-         svg(viewbox='0 0 24 24', x='0px', y='0px', version='1.1', xmlns='http://www.w3.org/2000/svg', xmlns:xlink='http://www.w3.org/1999/xlink')
-          g#menu
-            path(d='M3,18h18v-2H3V18z M3,13h18v-2H3V13z M3,6v2h18V6H3z') 
+        .icon.logoAction(ng-click='toggleSidebar()')
+         div.logoContainer
+          div.logo
+           h1 WORKEND
       span Menu
     md-content
       md-list
@@ -16,10 +16,10 @@ div(layout="column")
   #toolbar(data-0='height:192px', data-128='height: 64px')
     #actions
         md-button.menu
-          .icon(ng-click='toggleSidebar()')
-           svg(viewbox='0 0 24 24', x='0px', y='0px', version='1.1', xmlns='http://www.w3.org/2000/svg', xmlns:xlink='http://www.w3.org/1999/xlink')
-            g#menu
-              path(d='M3,18h18v-2H3V18z M3,13h18v-2H3V13z M3,6v2h18V6H3z')  
+          .icon.logoAction(ng-click='toggleSidebar()')
+           div.logoContainer
+            div.logo
+             h1 WORKEND
         .spacer   
          h3 {{ package.name }}
         .icon

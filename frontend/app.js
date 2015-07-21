@@ -11,6 +11,7 @@ angular.module('workend', [
       $rootScope.currentUser = $sessionStorage.currentUser ? $sessionStorage.currentUser : $rootScope.currentUser;
       if (!$rootScope.currentUser && $location.path() !== '/login') {
           WEsession.checkUser(function(response){
+            debugger
             $rootScope.userLoaded = true;
             $mdToast.show($mdToast.simple().content('Welcome back ' + response.username + '!'));
           });

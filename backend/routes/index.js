@@ -2,22 +2,12 @@ var express = require('express');
 var router = express.Router();
 var jade = require('jade');
 var passport = require('passport');
+var github = require('octonode');
 
 /* GET home page. */
 router.get('/', function(req, res) {
-  res.render('index', { title: 'Workend', user: req.user });
+	res.render('index', { title: 'Workend', user: req.user });
 });
-
-// Github routes
-// router.get('/auth/github',
-//   passport.authenticate('github'),
-//   function(req, res){
-//   });
-// router.get('/auth/github/callback', 
-//   passport.authenticate('github', { failureRedirect: '/login' }),
-//   function(req, res) {
-//     res.redirect('/');
-//   });
 
 // API jade partials
 router.get('/api/v1/partials/:partial', function (req, res){
@@ -42,6 +32,27 @@ router.get('/auth/session', session.session);
 router.post('/auth/session', session.login);
 router.delete('/auth/session', session.logout);
 
+// Github routes
+router.get('/auth/github',
+  passport.authorize('github'));
+
+router.get('/auth/github/callback', 
+  passport.authorize('github', { failureRedirect: '/auth/github/fail' }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect('/');
+  });
+router.get('/auth/github/fail', 
+	function(req, res){
+		res.redirect('/');
+	});
+router.get('github/repos',
+	function(req, res){
+		var client = github.client(req.user.gitToken);
+		client.get('/user/repos', {}, function (err, status, body, headers) {
+		    res.json(body);
+		});
+	});
 // Project routes
 var Projects = require('../controllers/projects.js');
 router.post('/api/v1/projects/new', ensureAuthenticated, Projects.create);

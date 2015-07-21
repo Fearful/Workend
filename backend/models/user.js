@@ -20,6 +20,10 @@ var UserSchema = new Schema({
   name: String,
   admin: Boolean,
   guest: Boolean,
+  github: Object,
+  gitToken: String,
+  githubId: String,
+  githubName: String,
   provider: String,
   starred: String,
   starredId: String

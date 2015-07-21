@@ -1,34 +1,42 @@
 block content
   div
     .login
+        div.logoContainer
+         div.logo
+          h1 WORKEND
         md-tabs.md-accent(md-selected='data.selectedIndex')
           md-tab#login(aria-controls='login-content')  Login 
-          |       
           md-tab#register(aria-controls='register-content')  Register 
-        |     
+          md-tab#github(aria-controls='github-content')  Login with Github
         ng-switch.tabpanel-container(on='data.selectedIndex')
           #login-content(role='tabpanel', aria-labelledby='login', ng-switch-when='0', md-swipe-left='next()', md-swipe-right='previous()')
             md-content
-              form(style='padding: 20px;')
-                .row
-                  md-text-float(label='Username', ng-model='$root.username')
-                  |               
-                  md-text-float(label='Password', ng-model='$root.password', type='password')
-                |             
-                md-button.md-raised.md-primary(ng-click='login()', aria-labelledby='Login')
-                  | Login 
-                  md-button
-          |       
+              form
+               div(layout, layout-sm='column')
+                md-input-container(style='width:40%;')
+                 label Username
+                 input(ng-model='$root.username')
+                md-input-container(style='width:40%; margin-left: 10%;')
+                 label Password
+                 input(ng-model='$root.password', type='password')
+               div(layout, layout-sm='column')      
+                md-button.md-raised.md-primary(ng-click='login()', aria-labelledby='Login') Login
           #register-content(role='tabpanel', aria-labelledby='register', ng-switch-when='1', md-swipe-left='next()', md-swipe-right='previous()')
             md-content
-              form(style='padding: 20px;')
-                .row
-                  md-text-float(label='Username', ng-model='$root.username')
-                  |               
-                  md-text-float(label='Email', ng-model='$root.email')
-                  |               
-                  md-text-float(label='Password', ng-model='$root.password', type='password')
-                |             
-                md-button.md-raised.md-primary(ng-click='register()', aria-labelledby='Register')
-                  | Register 
-                  md-button
+              form
+               div(layout, layout-sm='column')
+                md-input-container(style='width:40%;')
+                 label Username
+                 input(ng-model='$root.username')
+                md-input-container(style='width:40%; margin-left: 10%;')
+                 label Password
+                 input(ng-model='$root.password', type='password')
+               div(layout, layout-sm='column')      
+                md-input-container(style='width:40%;')
+                 label Email
+                 input(ng-model='$root.email')
+                md-button.md-raised.md-primary(ng-click='register()', aria-labelledby='Register', style='width:40%; margin-left: 10%;') Register
+          #github-content(role='tabpanel', aria-labelledby='github', ng-switch-when='2', md-swipe-left='next()', md-swipe-right='previous()')
+            md-content
+              form   
+                md-button.md-raised.md-primary(ng-click='githubLogin()', aria-labelledby='Github', style='width:80%; margin:0 8%;') Login

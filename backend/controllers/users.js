@@ -13,7 +13,6 @@ exports.create = function (req, res, next) {
     if (err) {
       return res.status(400).json(err);
     }
-
     req.logIn(newUser, function(err) {
       if (err) return next(err);
       return res.status(200).json(newUser.user_info)

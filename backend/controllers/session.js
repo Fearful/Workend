@@ -2,13 +2,22 @@
 
 var mongoose = require('mongoose'),
     passport = require('passport');
+var github = require('octonode');
 
 exports.session = function (req, res) {
+    console.log(req)
     if(!req.user){
         res.sendStatus(400, 'Not logged in');
         return;
     }
-    res.json({ user: req.user.user_info, starred: req.user.starred });
+    if(req.user.gitToken){
+        var client = github.client(req.user.gitToken);
+        client.get('/user/repos', {}, function (err, status, body, headers) {
+            res.json({ user: req.user.user_info, starredProject: req.user.starred, githubRepos: body });
+        });
+    } else {
+        res.json({ user: req.user.user_info, starredProject: req.user.starred });
+    }
 };
 exports.logout = function (req, res) {
     if (req.user) {
@@ -28,7 +37,14 @@ exports.login = function (req, res, next) {
             if (err) {
                 return res.send(err);
             }
-            res.json({ user: req.user.user_info, starredProject: req.user.starred });
+            if(req.user.gitToken){
+                var client = github.client(req.user.gitToken);
+                client.get('/user/repos', {}, function (err, status, body, headers) {
+                    res.json({ user: req.user.user_info, starredProject: req.user.starred, githubRepos: body });
+                });
+            } else {
+                res.json({ user: req.user.user_info, starredProject: req.user.starred });
+            }
         });
     })(req, res, next);
 }
