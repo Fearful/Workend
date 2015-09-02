@@ -7,19 +7,12 @@ angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBott
 	$window.document.oncontextmenu = function(e){
 		e.stopPropagation();
 		e.preventDefault();
-		if($mdSidenav('left').isOpen()){
-			$mdDialog.hide();
-			$mdSidenav('left').toggle();
-		}
 	    $mdBottomSheet.show({
 	      templateUrl: '/api/v1/partials/optionsBottom',
 	      targetEvent: e
 	    });
 	};
 	function logout(){
-		if($mdSidenav('left').isOpen()){
-			$mdSidenav('left').toggle();
-		}
 		WEsession.logout();
 	};
 	function projects(e){
@@ -74,6 +67,16 @@ angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBott
 		$scope.$root.$watch('currentUser.starred', function(newVal, oldVal){
 			if(typeof newVal === 'string' && newVal.length > 0){
 				getCodeDistribution(newVal);
+					$scope.$root.currentUser.sprints = [
+        { category: 'open', name: 'Pepperoni' },
+        { category: 'open', name: 'Sausage' },
+        { category: 'open', name: 'Ground Beef' },
+        { category: 'open', name: 'Bacon' },
+        { category: 'closed', name: 'Mushrooms' },
+        { category: 'closed', name: 'Onion' },
+        { category: 'closed', name: 'Green Pepper' },
+        { category: 'closed', name: 'Green Olives' }
+      ];
 			}
 		});
 	}
@@ -147,6 +150,18 @@ angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBott
 			// $mdToast.show($mdToast.simple().content('Please login or sign up'));
 		});
 	};
+	$scope.selectingOption = false;
+	$scope.keepToolbarOpen = function(event){
+		$scope.selectingOption = true;
+	}
+	$scope.$watch('toolbarOpen', function(newVal, oldVal){
+		if(!newVal && oldVal && !$scope.selectingOption){
+			// keep open when user is selecting project and product
+		} else if(!newVal && $scope.selectingOption){
+			$scope.toolbarOpen = true;
+		}
+	})
+	$scope.toolbarOpen = false;
 	$scope.$root.runTask = function(index){
 		var task = $scope.$root.tasks[index];
 		$http.post('/api/v1/tasks', { task: task.name, framework: task.icon, pathToProject: $scope.$root.currentUser.starred })

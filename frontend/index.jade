@@ -1,28 +1,28 @@
 extends layout
 
 block content
-  div(ng-controller='webtop') 
+  div(ng-controller='webtop', class="body") 
      div.loading(layout='row', layout-align='center center' ng-hide='userLoaded')
        md-progress-circular(md-mode='indeterminate')
      div(ng-view='')
 block foot
-  script(src='lib/Chart.js/Chart.min.js')
+  script(src='assets/lib/Chart.js/Chart.min.js')
   | 
-  script(src='lib/angular/angular.js')
+  script(src='assets/lib/angular/angular.js')
   |     
-  script(src='lib/angular-aria/angular-aria.js')
+  script(src='assets/lib/angular-aria/angular-aria.js')
   |     
-  script(src='lib/angular-animate/angular-animate.js')
+  script(src='assets/lib/angular-animate/angular-animate.js')
   |     
-  script(src='lib/hammerjs/hammer.js')
+  script(src='assets/lib/hammerjs/hammer.js')
   |     
-  script(src='lib/angular-material/angular-material.js')
+  script(src='assets/lib/angular-material/angular-material.min.js')
   |     
-  script(src='lib/ngStorage/ngStorage.min.js')
+  script(src='assets/lib/ngStorage/ngStorage.min.js')
   |     
-  script(src='lib/angular-route/angular-route.min.js')
+  script(src='assets/lib/angular-route/angular-route.min.js')
   |     
-  script(src='lib/tc-angular-chartjs/dist/tc-angular-chartjs.min.js')
+  script(src='assets/lib/tc-angular-chartjs/dist/tc-angular-chartjs.min.js')
   |     
   script(src='app.js')
   |     

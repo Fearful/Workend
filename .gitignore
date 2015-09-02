@@ -25,7 +25,14 @@ build/Release
 node_modules
 
 # Bower directory
-frontend/lib/
+frontend/assets/lib
 
 # Users Environment Variables
 .lock-wscript
+
+# Workend Tools (Which will be downloaded and installed after instalation)
+
+frontend/pr0t0
+frontend/coverage
+frontend/test
+frontend/boards

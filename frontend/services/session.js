@@ -1,6 +1,6 @@
 'use strict';
 
-angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage', '$location', '$http', '$timeout', '$mdToast', function($rootScope, $sessionStorage, $location, $http, $timeout, $mdToast){
+angular.module('workend').service('WEsession', ['$rootScope', '$sessionStorage', '$location', '$http', '$mdToast', function($rootScope, $sessionStorage, $location, $http, $mdToast){
 	var service = {};
 
 	service.login = function(username, password){

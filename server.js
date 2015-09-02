@@ -17,6 +17,8 @@ var app = express();
 require('./backend/config/passport');
 
 var routes = require('./backend/routes/index');
+var Template = require('./frontend/pr0t0/api/models/template');
+var pr0t0Routes = require('./frontend/pr0t0/api/routes/index');
 
 // view engine setup
 app.set('views', path.join(__dirname, 'frontend'));
@@ -37,6 +39,7 @@ app.use(passport.session());
 app.use(express.static(path.join(__dirname, 'frontend')));
 
 app.use('/', routes);
+app.use('/pr0t0/', pr0t0Routes);
 // Angular needs to handle the routing of the application
 app.use('/login', function(req, res){
   res.render('index', { title: 'Workend', user: req.user });
