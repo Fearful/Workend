@@ -11,7 +11,6 @@ angular.module('workend', [
       $rootScope.currentUser = $sessionStorage.currentUser ? $sessionStorage.currentUser : $rootScope.currentUser;
       if (!$rootScope.currentUser && $location.path() !== '/login') {
           WEsession.checkUser(function(response){
-            debugger
             $rootScope.userLoaded = true;
             $mdToast.show($mdToast.simple().content('Welcome back ' + response.username + '!'));
           });
@@ -21,7 +20,7 @@ angular.module('workend', [
       }
     });
 
-  }]).config(['$locationProvider', '$routeProvider', function($locationProvider, $routeProvider){
+  }]).config(['$locationProvider', '$routeProvider', '$mdThemingProvider', function($locationProvider, $routeProvider, $mdThemingProvider){
   	$locationProvider.html5Mode({
   		enabled: true,
   		requireBase: false
@@ -42,4 +41,7 @@ angular.module('workend', [
       .otherwise({
         redirectTo: '/'
       });
+      $mdThemingProvider.theme('default')
+        .primaryPalette('light-blue')
+        .accentPalette('deep-purple');
   }]);
