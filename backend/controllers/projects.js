@@ -1,9 +1,18 @@
 var mongoose = require('mongoose'),
 	Projects = mongoose.model('Project'),
+	Products = mongoose.model('Product'),
 	ObjectId = mongoose.Types.ObjectId;
 
 exports.create = function (req, res, next) {
   var newProject = new Projects(req.body);
+  Products.findById(ObjectId(req.body.product_id), function(err, products){
+  	products.sprints.push(newProject);
+  	products.save(function(err){
+  		if(err){
+  			return res.status(400).json(err);
+  		}
+  	})
+  });
   newProject.save(function(err) {
     if (err) {
       return res.status(400).json(err);

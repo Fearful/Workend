@@ -1,0 +1,43 @@
+md-dialog(aria-label='Edit Product', class="productDialog", style='min-width:350px;max-height:500px;')
+ form
+  md-toolbar
+   div.md-toolbar-tools(layout-padding, layout-align="space-between center")
+    h2 {{'workend.product.edit' | translate}} {{ product.name }}
+    span(flex)
+    md-button.md-icon-button(ng-click='close()')
+     md-icon
+      i.material-icons close
+  md-dialog-content
+   div(layout='column',flex)
+    md-input-container(flex)
+     label {{'workend.item.name' | translate}}
+     input(type='text',ng-model="product.name")
+    md-input-container(flex, style='height:200px;')
+     label {{'workend.item.description' | translate}}
+     textarea(md-maxlength="600",columns="1",ng-model="product.description")
+   div(layout='row', flex)
+    md-input-container(flex='60')
+     label {{'workend.item.version' | translate}}
+     input(type='text',ng-model="product.version")
+    md-switch(flex='40', ng-model="product.private" aria-label="Make product Private")
+     label {{'workend.product.private' | translate}}
+   div(layout="row", layout-align="space-around center", layout-sm="column", flex="100", ng-repeat="member in product.members")
+    label {{ member.name }}
+    md-input-container(flex="20")
+     label Role
+     md-select(ng-model="member.role", ng-disabled="member.role === 'owner'")
+      md-option(ng-repeat="role in prodRoles" value="{{ role }}") {{ role }}
+   div(layout="row", layout-align="space-around center", layout-sm="column", flex="100")
+    md-input-container(flex="40")
+     label Email
+     input(type="email", ng-model="new.user.email")
+    md-input-container(flex="20")
+     label Role
+     md-select(ng-model="new.user.role")
+      md-option(ng-repeat="role in roles" value="{{ role }}") {{ role }}
+    md-button
+     label(ng-click="addNewUser()") Add user to product
+  div.md-actions(layout="row")
+      md-button(ng-click='close()') {{'workend.item.cancel' | translate}}
+      span(flex)
+      md-button(ng-click='createNewProduct()') {{'workend.product.edit' | translate}}

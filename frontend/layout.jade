@@ -1,13 +1,83 @@
 doctype html
-html.no-js.lt-ie9(lang='en', ng-app='workend')
-  head
-    meta(charset='utf-8')
-    meta(http-equiv='X-UA-Compatible', content='IE=edge')
-    title Workend
-    meta(name='description', content='')
-    meta(name='viewport', content='width=device-width, initial-scale=1')
-    link(rel='stylesheet', href='/assets/lib/angular-material/angular-material.min.css')
-    link(rel='stylesheet', href='/assets/css/workend.css')
-  body
-    block content
-    block foot
+html
+ head
+  title Workend
+  include ./head.jade
+ body(ng-app='workend', layout='row', ng-controller='webtop' ng-cloak)
+  md-sidenav.md-sidenav-left.md-whtieframe-z2(md-component-id='left', md-is-locked-open='$mdMedia("gt-sm")', ng-class='{ "tiny" : toolbarMinified }')
+   md-toolbar.md-whiteframe-z1(layout-padding, layout='column')
+    div(layout='row')
+     span(flex='80')
+     div(flex='20', style='max-width:60px;', ng-hide='toolbarMinified')
+      md-button(style='margin-left:-15px;', ng-click='resizeToolbar(false)')
+       md-icon
+        i.material-icons keyboard_arrow_left
+     div(flex='20', style='max-width:60px;', ng-show='toolbarMinified')
+      md-button(ng-click='resizeToolbar(true)')
+       md-icon
+        i.material-icons keyboard_arrow_right
+    div(layout='row')
+     div.md-toolbar-tools-bottom.inset(layout='row', ng-hide='toolbarMinified', flex='100')
+      user-avatar
+      md-menu(flex='70')
+       md-button(aria-label='User options', ng-click='$mdOpenMenu($event)')
+        div.md-subhead {{ currentUser.username }}
+        div.md-body-1(style='font-size:10px;') {{ currentUser.email }}
+       md-menu-content(width='4')
+        md-menu-item(layout='row')
+         span {{'global.spanish' | translate}}
+         md-switch(ng-model='$root.languageSwitch', aria-label='Language Selection', ng-true-value="'en_US'", ng-false-value="'es_ES'")
+         span {{'global.english' | translate}}
+        md-menu-divider
+        md-menu-item
+         md-button(ng-click='logout()')
+          md-icon
+          {{'global.logout' | translate}}
+   md-list(ng-controller='sidenav')
+    md-list-item(ng-repeat='item in menu')
+     md-button(ng-click='item.action()', ng-class='{ "selected" : item.checkState() }', layout='row', layout-padding)
+      md-icon(style='float:left;padding:5px;')
+       i.material-icons {{ item.icon }}
+      span.md-subhead {{ item.name }}
+  div.md-whiteframe-z2(flex, layout='column', tabIndex='-1', role='main', style='z-index:3;')
+   md-toolbar.md-whiteframe-z1(layout='row', layout-padding)
+    md-button.menu(hide-gt-sm, ng-click='toggleMenu()', aria-label='Show Menu')
+     md-icon
+      i.material-icons menu
+     span Menu
+    md-button.menu(hide-gt-sm, ng-click='toggleTools()', aria-label='Show Tools')
+     md-icon
+      i.material-icons more_horiz
+     span Tools
+    div(flex)
+     md-menu
+      md-button(aria-label="Select Product", ng-click="$mdOpenMenu($event)") {{ prod.name }}
+      md-menu-content
+       md-menu-item(ng-click="closeToolbar()")
+        md-button(ng-click="newProduct()")
+         md-icon(class="hawcons-icon-19-bookmark-add", md-menu-align-target)
+         label {{'workend.createProd' | translate}}
+       md-menu-divider
+       md-menu-item(ng-click="closeToolbar()", ng-show="prod._id.length > 0 && prod.owner === currentUser._id")
+        md-button(ng-click="openProdSettings($event)", style='line-height:3;')
+         img(src="/static/assets/img/pencil.png", style='width:24px;')
+         label(style='padding-left:15px;') {{'workend.editProd' | translate}}
+       md-menu-divider(ng-show="prod._id.length > 0")
+       md-menu-item(ng-repeat="prod in products", ng-click="closeToolbar()")
+        md-button(ng-click="openProduct(prod)")
+         md-icon(class="hawcons-icon-18-bookmark", md-menu-align-target)
+         label {{ prod.name }}
+     md-menu
+      md-button(aria-label="Select Sprint", ng-click="$mdOpenMenu($event)") {{ sprint.name }}
+      md-menu-content
+       md-menu-item(ng-click="closeToolbar()")
+        md-button(ng-click="newProject()")
+         md-icon(class="hawcons-icon-19-bookmark-add", md-menu-align-target)
+         label {{'workend.createProj' | translate}}
+       md-menu-divider
+       md-menu-item(ng-repeat="sprint in sprints", ng-click="closeToolbar()")
+        md-button(ng-click="openProject(sprint)")
+         md-icon(class="hawcons-icon-18-bookmark", md-menu-align-target)
+         label {{ sprint.name }}
+   md-content(flex, id='content', ng-view, ng-cloak)
+  include ./scripts.jade

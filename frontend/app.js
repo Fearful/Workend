@@ -1,47 +1,76 @@
 'use strict';
-
+var socket = io('http://localhost:5000');
+  socket.connect();
+  socket.on('news', function (data) {
+    socket.emit('connect', 'test');
+  });
 // Declare app level module which depends on views, and components
 angular.module('workend', [
   'ngMaterial',
   'ngRoute',
+  'as.sortable',
+  'pascalprecht.translate',
   'ngStorage',
-  'tc.chartjs'
-]).run(['$rootScope', '$http', 'WEsession', '$sessionStorage', '$location', '$mdToast', function ($rootScope, $http, WEsession, $sessionStorage, $location, $mdToast) {
-    $rootScope.$watch('currentUser', function(currentUser) {
-      $rootScope.currentUser = $sessionStorage.currentUser ? $sessionStorage.currentUser : $rootScope.currentUser;
-      if (!$rootScope.currentUser && $location.path() !== '/login') {
-          WEsession.checkUser(function(response){
-            $rootScope.userLoaded = true;
-            $mdToast.show($mdToast.simple().content('Welcome back ' + response.username + '!'));
-          });
-      } else if($location.path() !== '/login'){
-        $rootScope.userLoaded = true;
-        $mdToast.show($mdToast.simple().content('Welcome back ' + $rootScope.currentUser.username + '!'));
-      }
-    });
-
-  }]).config(['$locationProvider', '$routeProvider', '$mdThemingProvider', function($locationProvider, $routeProvider, $mdThemingProvider){
+  'camera',
+  'tc.chartjs',
+  'pr0t0Editor'
+]).config(['$locationProvider', '$routeProvider', '$mdThemingProvider', '$translateProvider', function($locationProvider, $routeProvider, $mdThemingProvider, $translateProvider){
   	$locationProvider.html5Mode({
   		enabled: true,
   		requireBase: false
   	});
   	$routeProvider
-      .when('/', {
-      	templateUrl: '/api/v1/partials/index',
-        controller: 'webtop'
+    .when('/', {
+      	templateUrl: '/partials/index',
+        controller: 'workendCtrl'
       })
-      .when('/login', {
-        templateUrl: '/api/v1/partials/login',
-        controller: 'login'
-      })
-      .when('/signup', {
-        templateUrl: '/api/v1/partials/login',
-        controller: 'login'
-      })
-      .otherwise({
-        redirectTo: '/'
-      });
-      $mdThemingProvider.theme('default')
-        .primaryPalette('light-blue')
-        .accentPalette('deep-purple');
+    .when('/boards', {
+      templateUrl: 'boards/partials/index',
+      controller: 'boardCtrl',
+    })
+    .when('/timesheet', {
+      templateUrl: 'timesheet/partials/index',
+      controller: 'timesheetCtrl',
+    })
+    .when('/calendar', {
+      templateUrl: 'calendar/partials/index',
+      controller: 'calendarCtrl',
+    })
+    .when('/pr0t0', {
+      templateUrl: 'pr0t0/partials/index',
+      controller: 'pr0t0Controller',
+    })
+    .when('/login', {
+      templateUrl: '/partials/login',
+      controller: 'login'
+    })
+    .when('/newUser', {
+      templateUrl: '/partials/registered',
+      controller: 'registeredCtrl'
+    });
+    $mdThemingProvider.theme('default')
+      .primaryPalette('light-blue')
+      .accentPalette('indigo');
+
+    //Languages
+    // $translateProvider.translations('en', {
+    //   HEADLINE: 'Hello there, This is my awesome app!',
+    //   INTRO_TEXT: 'And it has i18n support!'
+    // })
+    // .translations('es', {
+    //   HEADLINE: 'Hello there, This is my awesome app!',
+    //   INTRO_TEXT: 'And it has i18n support!'
+    // });
+    $translateProvider.useStaticFilesLoader({
+        prefix: '/static/assets/lang/locale-',
+        suffix: '.json'
+    });
+    // $translateProvider.preferredLanguage('es_ES');
+    // $translateProvider.preferredLanguage('en_US');
+    $translateProvider.fallbackLanguage('en_US');
+    $translateProvider.determinePreferredLanguage(function () {
+      var lang = window.navigator.userLanguage || window.navigator.language;
+      return lang;
+    });
+    // $translateProvider.rememberLanguage(true);
   }]);

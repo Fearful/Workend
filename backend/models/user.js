@@ -5,81 +5,44 @@ var mongoose = require('mongoose'),
   crypto = require('crypto');
  
 var UserSchema = new Schema({
-  email: {
-    type: String,
-    unique: true,
-    required: true
-  },
-  username: {
-    type: String,
-    unique: true,
-    required: true
-  },
-  hashedPassword: String,
-  salt: String,
-  name: String,
-  admin: Boolean,
-  guest: Boolean,
-  github: Object,
-  gitToken: String,
-  githubId: String,
-  githubName: String,
-  provider: String,
-  starred: String,
-  starredId: String
+  email: { type: String, unique: true, required: true },
+  username: { type: String, unique: true, required: true },
+  hashedPassword: { type:String },
+  salt: { type:String },
+  name: { type:String },
+  avatar: { type: String, default: '/static/assets/uploads/userImages/' + this._id + '.png' },
+  github: { type:Object },
+  provider: { type:String },
+  saved_product: { type: String },
+  saved_project: { type: String },
+  preferredLanguage: { type: String }
 });
 /**
  * Virtuals
  */
-UserSchema
-  .virtual('password')
-  .set(function(password) {
+UserSchema.virtual('password').set(function(password) {
     this._password = password;
     this.salt = this.makeSalt();
     this.hashedPassword = this.encryptPassword(password);
-  })
-  .get(function() {
+  }).get(function() {
     return this._password;
   });
-UserSchema
-  .virtual('user_info')
-  .get(function () {
-    return { '_id': this._id, 'username': this.username, 'email': this.email };
-  });
-
+UserSchema.virtual('user_info').get(function () {
+    return { '_id': this._id, 'username': this.username, 'email': this.email, 'avatar': this.avatar };
+});
 /**
  * Validations
  */
-
 var validatePresenceOf = function (value) {
   return value && value.length;
 };
-
 UserSchema.path('email').validate(function (email) {
   var emailRegex = /^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/;
   return emailRegex.test(email);
 }, 'The specified email is invalid.');
-
-UserSchema.path('email').validate(function(value, respond) {
-  mongoose.models["User"].findOne({email: value}, function(err, user) {
-    if(err) throw err;
-    if(user) return respond(false);
-    respond(true);
-  });
-}, 'The specified email address is already in use.');
-
-UserSchema.path('username').validate(function(value, respond) {
-  mongoose.models["User"].findOne({username: value}, function(err, user) {
-    if(err) throw err;
-    if(user) return respond(false);
-    respond(true);
-  });
-}, 'The specified username is already in use.');
-
 /**
  * Pre-save hook
  */
-
 UserSchema.pre('save', function(next) {
   if (!this.isNew) {
     return next();
@@ -92,25 +55,20 @@ UserSchema.pre('save', function(next) {
     next();
   }
 });
-
 /**
  * Methods
  */
 UserSchema.methods = {
-
   authenticate : function(plainText) {
     return this.encryptPassword(plainText) === this.hashedPassword;
   },
-
   makeSalt : function() {
     return crypto.randomBytes(16).toString('base64');
   },
-
   encryptPassword : function(password) {
     if (!password || !this.salt) return '';
     var salt = new Buffer(this.salt, 'base64');
     return crypto.pbkdf2Sync(password, salt, 10000, 64).toString('base64');
   }
-
 };
 module.exports = mongoose.model('User', UserSchema, 'users');

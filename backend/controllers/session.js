@@ -1,22 +1,21 @@
 'use strict';
 
 var mongoose = require('mongoose'),
-    passport = require('passport');
-var github = require('octonode');
-
+    passport = require('passport'),
+    github = require('octonode');
 exports.session = function (req, res) {
-    console.log(req)
     if(!req.user){
-        res.sendStatus(400, 'Not logged in');
+        //302 redirect
+        res.redirect('/login');
         return;
     }
     if(req.user.gitToken){
         var client = github.client(req.user.gitToken);
         client.get('/user/repos', {}, function (err, status, body, headers) {
-            res.json({ user: req.user.user_info, starredProject: req.user.starred, githubRepos: body });
+            res.json({user: req.user, githubRepos: body});
         });
     } else {
-        res.json({ user: req.user.user_info, starredProject: req.user.starred });
+        res.json({ user: req.user });
     }
 };
 exports.logout = function (req, res) {
@@ -40,11 +39,11 @@ exports.login = function (req, res, next) {
             if(req.user.gitToken){
                 var client = github.client(req.user.gitToken);
                 client.get('/user/repos', {}, function (err, status, body, headers) {
-                    res.json({ user: req.user.user_info, starredProject: req.user.starred, githubRepos: body });
+                    res.json({ user: req.user, githubRepos: body });
                 });
             } else {
-                res.json({ user: req.user.user_info, starredProject: req.user.starred });
+                res.json({ user: req.user });
             }
         });
-    })(req, res, next);
+    })(req, res);
 }

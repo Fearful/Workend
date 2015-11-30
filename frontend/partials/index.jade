@@ -1,63 +1,21 @@
 div
-  div(class="menu-action")
-    md-fab-toolbar(md-open="toolbarOpen",count="0", class="md-left", flex='100')
-     md-fab-trigger(class="align-with-text")
-      md-button(aria-label="Menu", class="md-fab md-primary")
-       md-icon(md-svg-src="assets/img/menu.svg")
-     md-toolbar(offset="5")
-      md-fab-actions(class="md-toolbar-tools")
-         md-input-container
-          label Select Product
-          md-select(ng-model="currentUser.sprints", ng-mousedown="keepToolbarOpen($event)")
-           md-option(ng-repeat="prod in currentUser.products", value="{{prod}}") {{prod}}
-         md-input-container
-          label Active Sprints
-          md-select(ng-model="currentUser.sprints", ng-mousedown="keepToolbarOpen($event)")
-           md-optgroup(label="Active")
-            md-option(ng-value="sprint.name", ng-repeat="sprint in currentUser.sprints | filter: {status: 'active' }") {{sprint.name}}
-          md-optgroup(label="Closed")
-            md-option(ng-value="sprint.name", ng-repeat="sprint in currentUser.sprints | filter: {status: 'closed' }") {{sprint.name}}
-       md-button(aria-label="comment", class="md-icon-button")
-        md-icon(md-svg-src="assets/img/ic_comment_24px.svg")
-       md-button(aria-label="label", class="md-icon-button")
-        md-icon(md-svg-src="assets/img/ic_comment_24px.svg")
-       md-button(aria-label="photo", class="md-icon-button")
-        md-icon(md-svg-src="assets/img/ic_comment_24px.svg")
-   div(offset="5")
-    h2(class="md-toolbar-item md-breadcrumb md-headline")
-     span(flex="20") Product
-     span(class="docs-menu-separator-icon", style="transform: translate3d(0,1px,0)")
-      span(class="md-visually-hidden")
-      md-icon(aria-hidden="true", md-svg-src="assets/img/ic_chevron_right_24px.svg", style="transform:translateY(-2px)", class="md-default-theme")
-       svg(version="1.1", xmlns="http://www.w3.org/2000/svg", xmlns:xlink="http://www.w3.org/1999/xlink", x="0px", y="0px", width="100%", height="100%", viewBox="0 0 24 24", enable-background="new 0 0 24 24", xml:space="preserve", fit="", preserveAspectRatio="xMidYMid meet", style="pointer-events: none; display: block;")
-        g(id="Header")
-         g
-          rect(x="-618", y="-1336", fill="none", width="1400", height="3600")
-        g(id="Label")
-        g(id="Icon")
-         g
-          polygon(points="10,6 8.6,7.4 13.2,12 8.6,16.6 10,18 16,12")
-          rect(fill="none", width="24", height="24")
-        g(id="Grid", display="none")
-         g(display="inline")
-     span(flex="20", class="md-breadcrumb-page") Sprint
-  md-content.md-padding
-    div(layout="row" layout-align="center center")
+  md-content.md-padding(ng-mousedown="ctb()", style='background:#90CAF9')
+    div(layout="row", layout-sm="column" layout-align="center center")
       md-card(class="md-whiteframe-z3", flex='45')
-        h3(style="font-weight:normal", offset="5") Sprint Status
+        h3(style="font-weight:normal", offset="5") {{'workend.sprintStatus' | translate}}
       md-card(class="md-whiteframe-z3", flex='45')
-        h3(style="font-weight:normal", offset="5") Code Coverage
+        h3(style="font-weight:normal", offset="5") {{'workend.coverage' | translate}}
         canvas(offset="5", tc-chartjs-pie, chart-options="chartOptions", chart-data="countData", auto-legend)
-    div(layout="row" layout-align="center center")
+    div(layout="row", layout-sm="column" layout-align="center center")
       md-card(class="md-whiteframe-z3", flex='45')
-        h3(style="font-weight:normal", offset="5") Unit & e2e report
+        h3(style="font-weight:normal", offset="5") {{'workend.testReports' | translate}}
         canvas(offset="5", tc-chartjs-pie, chart-options="chartOptions", chart-data="fileData", auto-legend)
       md-card(class="md-whiteframe-z3", flex='45')
-        h3(style="font-weight:normal", offset="5") Project Milestone
+        h3(style="font-weight:normal", offset="5") {{'workend.milestone' | translate}}
         canvas(offset="5", tc-chartjs-pie, chart-options="chartOptions", chart-data="countData", auto-legend)
-    div(layout="row" layout-align="center center", flex='90')
+    div(layout="row", layout-sm="column" layout-align="center center", flex='90')
       md-card(class="md-whiteframe-z3", style="min-width:91%")
-        h3(style="font-weight:normal", offset="5") Project files statistics
+        h3(style="font-weight:normal", offset="5") {{'workend.fileStatistics' | translate}}
         div(offset="5", layout="column")
          canvas(flex='20', tc-chartjs-pie, chart-options="chartOptions", chart-data="fileData", auto-legend)
         div(offset="5", layout="column")

@@ -1,0 +1,125 @@
+{
+	"global": {
+		"english": "English",
+		"spanish": "Español",
+		"logout": "Cerrar session",
+		"greetings": {
+			"welcome": "Bienvenido de nuevo, "
+		}
+	},
+	"workend": {
+		"appName": "Workend",
+		"productLabel": "Producto",
+		"projectLabel": "Sprint",
+		"loading": "Cargando workend",
+		"coverage": "Cobertura de código",
+		"sprintStatus": "Estado del sprint",
+		"testReports": "Reporte de tests de unidad y e2e",
+		"milestone": "Objetivos del proyecto",
+		"fileStatistics": "Estadisticas de los archivos del proyecto",
+		"createProd": "Crear Producto",
+		"editProd": "Editar Producto",
+		"createProj": "Crear sprint",
+		"item": {
+			"name": "Nombre",
+			"description": "Descripcion",
+			"version": "Version",
+			"cancel": "Cancelar"
+		},
+		"product": {
+			"create": "Crear producto",
+			"private": "Privado",
+			"edit": "Editar "
+		},
+		"project": {
+			"create": "Crear sprint",
+			"backlog": "Backlog",
+			"reqSprint": "Sprint de requerimientos",
+			"start": "Fecha de inicio",
+			"end": "Fecha de cierre"
+		}
+	},
+	"boards": {
+		"appName": "Boards",
+		"newTask": "Crear tarea",
+		"newIssue": "Crear bug",
+		"myWork": "Mi trabajo",
+		"search": "Buscar en board",
+		"assignToMe": "Asignar a mi",
+		"follow": "Seguir",
+		"updateItem": "Actualizado",
+		"deletedItem": "Borrado",
+		"task": {
+			"created": "Tarea creada",
+			"createNew": "Crear tarea en ",
+			"dueOn": "Fecha planeada",
+			"sp": "Story Points",
+			"update": "Guardar tarea",
+			"create": "Crear tarea"
+		},
+		"issue": {
+			"created": "Bug creado",
+			"createNew": "Crear bug en ",
+			"selParent": "Seleccionar tarea padre",
+			"selTask": "Seleccionar tarea",
+			"foundIn": "Encontrado en",
+			"env": "Ambiente",
+			"update": "Guardar bug",
+			"create": "Crear Bug"
+		},
+		"item": {
+			"name": "Nombre",
+			"description": "Descripcion",
+			"priority": "Prioridad",
+			"selAssignees": "Seleccionar asignados",
+			"addAssignees": "Agregar personas",
+			"cancel": "Cancelar",
+			"delete": "Borrar"
+		}
+	},
+	"calendar": {
+		"appName": "Calendar",
+		"unscheduledTasks": "Tareas sin programar",
+		"search": "Buscar en calendario",
+		"week":{
+			"sunday": "Domingo",
+			"monday": "Lunes",
+			"tuesday": "Martes",
+			"wednesday": "Miercoles",
+			"thursday": "Jueves",
+			"friday": "Viernes",
+			"saturday": "Sabado"
+		}
+	},
+	"timesheet": {
+		"appName": "Timesheet",
+		"search": "Agregar item",
+		"selWeeks": "Navegar semanas",
+		"project": "Sprint",
+		"total": "Total",
+		"clear": "Limpiar datos sin guardar",
+		"save": "Guardar",
+		"close": "Cerrar"
+	},
+	"reports": {
+		"appName": "Reports"
+	},
+	"prototype": {
+		"file": "Archivo",
+		"new": "Nuevo Prototipo",
+		"open": "Abrir ...",
+		"share": "Compartir :D",
+		"rename": "Renombrar"
+	},
+	"login": {
+		"login": "Ingresar",
+		"register": "Registrarse",
+		"username": "Usuario",
+		"password": "Contraseña",
+		"email": "Direccion de email",
+		"companyName": "Nombre de la compania",
+		"description": "Descripcion",
+		"message": "Ingresa o registrate"
+	}
+
+}

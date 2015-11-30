@@ -1,0 +1,125 @@
+{
+	"global": {
+		"english": "English",
+		"spanish": "Español",
+		"logout": "Logout",
+		"greetings": {
+			"welcome": "Welcome back, "
+		}
+	},
+	"workend": {
+		"appName": "Workend",
+		"productLabel": "Product",
+		"projectLabel": "Sprint",
+		"loading": "Loading workend",
+		"coverage": "Code Coverage",
+		"sprintStatus": "Sprint Status",
+		"testReports": "Unit & e2e report",
+		"milestone": "Project Milestone",
+		"fileStatistics": "Project files statistics",
+		"createProd": "New Product",
+		"editProd": "Edit Product",
+		"createProj": "New Sprint",
+		"item": {
+			"name": "Name",
+			"description": "Description",
+			"version": "Version",
+			"cancel": "Cancel"
+		},
+		"product": {
+			"create": "Create product",
+			"private": "Private",
+			"edit": "Edit "
+		},
+		"project": {
+			"create": "Create sprint",
+			"backlog": "Backlog",
+			"reqSprint": "Requirement Sprint",
+			"start": "Sprint start date",
+			"end": "Sprint end date"
+		}
+	},
+	"boards": {
+		"appName": "Boards",
+		"newTask": "New task",
+		"newIssue": "New issue",
+		"myWork": "My work",
+		"search": "Search in board",
+		"assignToMe": "Assign to me",
+		"follow": "Follow",
+		"updateItem": "Item updated",
+		"deletedItem": "Item deleted",
+		"task": {
+			"created": "Task created",
+			"createNew": "Create new task in ",
+			"dueOn": "Due on",
+			"sp": "Story Points",
+			"update": "Update",
+			"create": "Create task"
+		},
+		"issue": {
+			"created": "Issue created",
+			"createNew": "Create new issue in ",
+			"selParent": "Select parent task",
+			"selTask": "Select task",
+			"foundIn": "Found In",
+			"env": "Enviroment",
+			"update": "Update",
+			"create": "Create Issue"
+		},
+		"item": {
+			"name": "Name",
+			"description": "Description",
+			"priority": "Priority",
+			"selAssignees": "Select Assignees",
+			"addAssignees": "Add Assignee",
+			"cancel": "Cancel",
+			"delete": "Delete"
+		}
+	},
+	"calendar": {
+		"appName": "Calendar",
+		"unscheduledTasks": "Unscheduled tasks",
+		"search": "Search in calendar",
+		"week":{
+			"sunday": "Sunday",
+			"monday": "Monday",
+			"tuesday": "Tuesday",
+			"wednesday": "Wednesday",
+			"thursday": "Thursday",
+			"friday": "Friday",
+			"saturday": "Saturday"
+		}
+	},
+	"timesheet": {
+		"appName": "Timesheets",
+		"search": "Add item to timesheet",
+		"selWeeks": "Navigate weeks",
+		"project": "Sprint",
+		"total": "Total",
+		"clear": "Clear unsaved changes",
+		"save": "Save timesheet",
+		"close": "Close timesheet"
+	},
+	"reports": {
+		"appName": "Reports"
+	},
+	"prototype": {
+		"file": "File",
+		"new": "New Prototype",
+		"open": "Open ...",
+		"share": "Share :D",
+		"rename": "Rename"
+	},
+	"login": {
+		"login": "Login",
+		"register": "Register",
+		"username": "Username",
+		"password": "Password",
+		"email": "Email Address",
+		"companyName": "Company Name",
+		"description": "Description",
+		"message": "Login or signup"
+	}
+
+}

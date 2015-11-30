@@ -1,0 +1,13 @@
+md-content(layout-padding, layout="column", layout-align="center center")
+ div(flex)
+ h2 Add your custom avatar, take a picture!
+ div(flex, ng-show='completed', layout="row", layout-align="center center")
+  h2 Thanks where would you like to go now?
+ div(flex, layout="row", layout-align="center center", ng-hide='completed')
+  div(layout-padding)
+   ng-camera(capture-message="Welcome to the team!", countdown="3", output-height="320", output-width="425", viewer-height="320", image-format="png", action-message="Take picture", snapshot="picture", flash-fallback-url="/static/assets/lib/webcamjs/webcam.swf", overlay-url="/static/assets/lib/ng-camera/app/overlay.png", shutter-url="/static/assets/audio/shutter.mp3")
+ div(flex, layout="row", layout-align="center center")
+  md-button(ng-click='continue()', ng-hide="completed")
+   span Later
+  md-button(ng-click='continue()', ng-show="completed")
+   span Finish

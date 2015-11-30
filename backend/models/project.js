@@ -2,14 +2,19 @@ var mongoose = require('mongoose')
    ,Schema = mongoose.Schema;
  
 var projectSchema = new Schema({
-    dateAdded: {type: Date, default: Date.now},
-    author: {type: String, default: ''},
+    created_at: {type: Date, default: Date.now},
+    created_by: {type: String, default: ''},
     description: {type: String, default: ''},
     mainFile: {type: String, default: ''},
-    version: {type: String, default: '0.0.0'},
+    current_version: {type: String, default: '0.0.0'},
     name: {type: String, default: ''},
-    owner: {type: String},
-    path: {type: String}
+    path: {type: String},
+    status: {type: String, default: 'OPEN'},
+    requirement_sprint: { type: Boolean, default: false },
+    product_id: { type: String },
+    start_date: { type: Date },
+    end_date: { type: Date },
+    iteration: { type: Number }
 });
  
 module.exports = mongoose.model('Project', projectSchema, 'projects');

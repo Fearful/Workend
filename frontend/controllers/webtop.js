@@ -1,182 +1,142 @@
 'use strict';
 
-angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', '$mdDialog', '$http', '$location', '$mdToast', '$route', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession, $mdDialog, $http, $location, $mdToast, $route){
-	$scope.toggleSidebar = function(){
-		$mdSidenav('left').toggle();
-	};
-	$window.document.oncontextmenu = function(e){
-		e.stopPropagation();
-		e.preventDefault();
-	    $mdBottomSheet.show({
-	      templateUrl: '/api/v1/partials/optionsBottom',
-	      targetEvent: e
-	    });
-	};
-	function logout(){
-		WEsession.logout();
-	};
-	function projects(e){
-		$mdDialog.show({
-	      controller: 'projectsDialog',
-	      templateUrl: '/api/v1/partials/projectsDialog',
-	      targetEvent: e
-	    });
-	};
-	function switchProjects(e){
-		$mdDialog.show({
-	      controller: 'projectsListDialog',
-	      templateUrl: '/api/v1/partials/projectsListDialog',
-	      targetEvent: e
-	    });
-	};
-	$scope.options = [{
-		name: 'Add project',
-		action: projects
-	},{
-		name: 'Switch Active Project',
-		action: switchProjects
-	},{
-		name: 'Logout',
-		action: logout
-	}];
-	$scope.chartOptions = {
-      // Sets the chart to be responsive
-      responsive: true,
-      //Boolean - Whether we should show a stroke on each segment
-      segmentShowStroke : true,
-      //String - The colour of each segment stroke
-      segmentStrokeColor : '#fff',
-      //Number - The width of each segment stroke
-      segmentStrokeWidth : 2,
-      //Number - The percentage of the chart that we cut out of the middle
-      percentageInnerCutout : 0, // This is 0 for Pie charts
-      //Number - Amount of animation steps
-      animationSteps : 100,
-      //String - Animation easing effect
-      animationEasing : 'easeOutBounce',
-      //Boolean - Whether we animate the rotation of the Doughnut
-      animateRotate : true,
-      //Boolean - Whether we animate scaling the Doughnut from the centre
-      animateScale : false,
-      //String - A legend template
-      legendTemplate : '<ul class="tc-chart-js-legend"><% for (var i=0; i<segments.length; i++){%><li><span style="background-color:<%=segments[i].fillColor%>"></span><%if(segments[i].label){%><%=segments[i].label%><%}%></li><%}%></ul>'
-	};
-	$scope.fileData = []
-	$scope.countData = [];
-	if($scope.$root.currentUser){
-		$scope.$root.$watch('currentUser.starred', function(newVal, oldVal){
-			if(typeof newVal === 'string' && newVal.length > 0){
-				getCodeDistribution(newVal);
-					$scope.$root.currentUser.sprints = [
-        { category: 'open', name: 'Pepperoni' },
-        { category: 'open', name: 'Sausage' },
-        { category: 'open', name: 'Ground Beef' },
-        { category: 'open', name: 'Bacon' },
-        { category: 'closed', name: 'Mushrooms' },
-        { category: 'closed', name: 'Onion' },
-        { category: 'closed', name: 'Green Pepper' },
-        { category: 'closed', name: 'Green Olives' }
-      ];
-			}
-		});
-	}
-	var colors = [{
-		color: '#2196F3',
-		highlight: '#64B5F6'
-	},{
-		color: '#673AB7',
-		highlight: '#9575CD'
-	},{
-		color: '#009688',
-		highlight: '#4DB6AC'
-	},{
-		color: '#FF9800',
-		highlight: '#FFB74D'
-	},{
-		color: '#795548',
-		highlight: '#A1887F'
-	},{
-		color: '#8BC34A',
-		highlight: '#AED581'
-	}]
-	function getCodeDistribution(path){
-		var index = 0;
-		$http.post('/api/v1/statistics', { path: path })
-		.success(function (response, status, headers, config) {
-			if(response.package){
-				$scope.package = JSON.parse(response.package)
-			} else {
-				$scope.package = false
-			}
-			if(response.tasks){
-				$scope.$root.tasks = response.tasks;
-			} else {
-				$scope.$root.tasks = false;
-			}
-			$scope.fileData = []
-			$scope.countData = [];
-			angular.forEach(response.fileCount, function(file){
-				$scope.fileData.push({
-					value: file.count,
-					color: colors[index].color,
-					highlight: colors[index].highlight,
-					label: file.lang
-				});
-				if(colors[index + 1]){
-					index = index + 1;
-				} else {
-					index = 0;
-				}
+angular.module('workend').controller('webtop', ['$scope', '$mdSidenav', '$mdBottomSheet', '$timeout', '$window', 'WEsession', '$mdDialog', '$http', '$location', '$mdToast', '$route', '$translate', function($scope, $mdSidenav, $mdBottomSheet, $timeout, $window, WEsession, $mdDialog, $http, $location, $mdToast, $route, $translate){
+	WEsession.checkUser(function(res){
+		if(typeof res.user === 'object'){
+			$http.get('product').success(function(data){
+				var selectedProd = $scope.$root.currentUser.saved_product;
+				var selectedProj = $scope.$root.currentUser.saved_project;
+				$scope.$root.products = data;
+				for (var i = data.length - 1; i >= 0; i--) {
+					if(data[i]._id == selectedProd){
+						$scope.$root.prod = data[i];
+						$scope.$root.sprints = data[i].sprints;
+						for (var e = $scope.$root.sprints.length - 1; e >= 0; e--) {
+							if($scope.$root.sprints[e]._id == selectedProj){
+								$scope.$root.sprint = $scope.$root.sprints[e];
+							}
+						};
+					}
+				};
 			});
-			angular.forEach(response.lineCount, function(file){
-				$scope.countData.push({
-					value: file.count,
-					color: colors[index].color,
-					highlight: colors[index].highlight,
-					label: file.lang
-				});
-				if(colors[index + 1]){
-					index = index + 1;
-				} else {
-					index = 0;
-				}
-			});
-			$timeout(function(){
-				$scope.$apply();
-			})
-		})
-		.error(function(error, status, headers, config) {
-		 //  	$location.path('/login');
-			// $mdToast.show($mdToast.simple().content('Please login or sign up'));
-		});
-	};
-	$scope.selectingOption = false;
-	$scope.keepToolbarOpen = function(event){
-		$scope.selectingOption = true;
+		}
+	});
+	$scope.currentTool = 'Home';
+	$scope.toolbarMinified = false;
+	$scope.resizeToolbar = function(boolean){
+		$scope.toolbarMinified = !boolean;
 	}
-	$scope.$watch('toolbarOpen', function(newVal, oldVal){
-		if(!newVal && oldVal && !$scope.selectingOption){
-			// keep open when user is selecting project and product
-		} else if(!newVal && $scope.selectingOption){
-			$scope.toolbarOpen = true;
+	$scope.$root.languageSwitch = $translate.preferredLanguage() === 'en-US' ? 'en_US' : 'es_ES';
+	$scope.$root.$watch('languageSwitch', function(newVal, oldVal){
+		if(newVal && newVal !== oldVal){
+			$scope.$root.currentUser.preferredLanguage = newVal;
+			$http.post('user/saveSession', { preferredLanguage: newVal });
+			$translate.use(newVal)
 		}
 	})
-	$scope.toolbarOpen = false;
-	$scope.$root.runTask = function(index){
-		var task = $scope.$root.tasks[index];
-		$http.post('/api/v1/tasks', { task: task.name, framework: task.icon, pathToProject: $scope.$root.currentUser.starred })
-		.success(function (response, status, headers, config) {
-			debugger;
-		})
-		.error(function(error, status, headers, config) {
-		 //  	$location.path('/login');
-			// $mdToast.show($mdToast.simple().content('Please login or sign up'));
-		});
-		$mdToast.show({
-		  controller: 'taskRunToaster',
-		  templateUrl: '/api/v1/partials/taskRunToaster',
-		  hideDelay: 6000,
-		  position: 'top right'
-		});
+	$scope.newProject = function(e){
+		$mdDialog.show({
+	      controller: 'projectsDialog',
+	      templateUrl: 'partials/projectCreate',
+	      targetEvent: e,
+	      clickOutsideToClose:true
+	    });
+	};
+	$scope.newProduct = function(e){
+		$mdDialog.show({
+	      controller: 'productDialog',
+	      templateUrl: 'partials/productCreate',
+	      targetEvent: e,
+	      clickOutsideToClose:true
+	    });
+	};
+	$scope.openProdSettings = function(e){
+		$mdDialog.show({
+	      controller: 'memberDialog',
+	      templateUrl: 'partials/editProd',
+	      targetEvent: e,
+	      clickOutsideToClose:true
+	    });
+	};
+	$scope.openProduct = function(prod){
+		$http.post('user/saveSession', { productId: prod._id, projectId: $scope.$root.sprint ? $scope.$root.sprint._id : '' });
+		$scope.$root.sprint = { _id: '', name: 'Select Sprint'};
+		$scope.$root.prod = prod;
+	};
+	$scope.openProject = function(project){
+		$scope.$root.sprint = project;
+	};
+	$scope.openProdSettings = function(e){
+		$mdDialog.show({
+	      controller: 'memberDialog',
+	      templateUrl: 'partials/editProd',
+	      targetEvent: e,
+	      clickOutsideToClose:true
+	    });
+	};
+    $scope.$root.active_sprints = [];
+	$scope.$root.closed_sprints = [];
+	$scope.$root.prod = { _id: '', name: 'Select Product'};
+	$scope.$root.sprint = { _id: '', name: 'Select Sprint'};
+	$scope.toggleMenu = function(){
+		$mdSidenav('left').toggle();
+	};
+	$scope.logout = function(){
+		WEsession.logout();
 	}
-}]);
+	$scope.openTool = function(path){
+		$location.path(path);
+	}
+	$scope.$watch('currentUser', function(newVal, oldVal){
+		if(newVal && newVal != oldVal){
+			if(oldVal === undefined || newVal._id !== oldVal._id){
+				// Setup togetherJS
+				TogetherJS.config("useMinimizedCode", true);
+				TogetherJS.config("autoStart", false);
+				TogetherJS.config("getUserName", newVal.username);
+				TogetherJS.config("getUserAvatar", 'http://localhost:5000' + newVal.avatar);
+				if($scope.$root.languageSwitch !== newVal.preferredLanguage){
+					$translate.preferredLanguage(newVal.preferredLanguage);
+					$scope.$root.languageSwitch = newVal.preferredLanguage;
+				}
+				$timeout(function(){
+					$translate('global.greetings.welcome').then(function(greeting){
+						$mdToast.show($mdToast.simple().content(greeting + newVal.username + ' !.'));
+					});
+				});
+			}
+		}
+	});
+	$scope.$root.$watch('prod', function(newVal, oldVal){
+		if(newVal && $scope.products){
+			$scope.$root.sprints = newVal.sprints;
+			for (var i = $scope.products.length - 1; i >= 0; i--) {
+				if($scope.products[i]._id === newVal._id){
+					if($scope.products[i].active_sprints !== newVal.active_sprints){
+						$scope.products[i].active_sprints = newVal.active_sprints;
+					}
+					if($scope.products[i].closed_sprints !== newVal.closed_sprints){
+						$scope.products[i].closed_sprints = newVal.closed_sprints;
+					}
+				}
+			};
+			for (var i = $scope.$root.active_sprints.length - 1; i >= 0; i--) {
+				if($scope.$root.active_sprints[i]._id === $scope.$root.currentUser.saved_project){
+					$scope.$root.sprint = $scope.$root.active_sprints[i];
+				}
+			};
+		}
+	});
+	$scope.$root.$watch('sprint', function(newVal, oldVal){
+		if(newVal && newVal._id.length > 0){
+			$http.post('user/saveSession', { productId: $scope.$root.prod._id, projectId: newVal._id }).success(function(data, err){
+				
+			});
+		}
+	});
+}]).directive('userAvatar', function() {
+  return {
+    replace: true,
+    template: '<svg class="user-avatar" viewBox="0 0 128 128" height="64" width="64" pointer-events="none" display="block" > <path fill="#FF8A80" d="M0 0h128v128H0z"/> <path fill="#FFE0B2" d="M36.3 94.8c6.4 7.3 16.2 12.1 27.3 12.4 10.7-.3 20.3-4.7 26.7-11.6l.2.1c-17-13.3-12.9-23.4-8.5-28.6 1.3-1.2 2.8-2.5 4.4-3.9l13.1-11c1.5-1.2 2.6-3 2.9-5.1.6-4.4-2.5-8.4-6.9-9.1-1.5-.2-3 0-4.3.6-.3-1.3-.4-2.7-1.6-3.5-1.4-.9-2.8-1.7-4.2-2.5-7.1-3.9-14.9-6.6-23-7.9-5.4-.9-11-1.2-16.1.7-3.3 1.2-6.1 3.2-8.7 5.6-1.3 1.2-2.5 2.4-3.7 3.7l-1.8 1.9c-.3.3-.5.6-.8.8-.1.1-.2 0-.4.2.1.2.1.5.1.6-1-.3-2.1-.4-3.2-.2-4.4.6-7.5 4.7-6.9 9.1.3 2.1 1.3 3.8 2.8 5.1l11 9.3c1.8 1.5 3.3 3.8 4.6 5.7 1.5 2.3 2.8 4.9 3.5 7.6 1.7 6.8-.8 13.4-5.4 18.4-.5.6-1.1 1-1.4 1.7-.2.6-.4 1.3-.6 2-.4 1.5-.5 3.1-.3 4.6.4 3.1 1.8 6.1 4.1 8.2 3.3 3 8 4 12.4 4.5 5.2.6 10.5.7 15.7.2 4.5-.4 9.1-1.2 13-3.4 5.6-3.1 9.6-8.9 10.5-15.2M76.4 46c.9 0 1.6.7 1.6 1.6 0 .9-.7 1.6-1.6 1.6-.9 0-1.6-.7-1.6-1.6-.1-.9.7-1.6 1.6-1.6zm-25.7 0c.9 0 1.6.7 1.6 1.6 0 .9-.7 1.6-1.6 1.6-.9 0-1.6-.7-1.6-1.6-.1-.9.7-1.6 1.6-1.6z"/> <path fill="#E0F7FA" d="M105.3 106.1c-.9-1.3-1.3-1.9-1.3-1.9l-.2-.3c-.6-.9-1.2-1.7-1.9-2.4-3.2-3.5-7.3-5.4-11.4-5.7 0 0 .1 0 .1.1l-.2-.1c-6.4 6.9-16 11.3-26.7 11.6-11.2-.3-21.1-5.1-27.5-12.6-.1.2-.2.4-.2.5-3.1.9-6 2.7-8.4 5.4l-.2.2s-.5.6-1.5 1.7c-.9 1.1-2.2 2.6-3.7 4.5-3.1 3.9-7.2 9.5-11.7 16.6-.9 1.4-1.7 2.8-2.6 4.3h109.6c-3.4-7.1-6.5-12.8-8.9-16.9-1.5-2.2-2.6-3.8-3.3-5z"/> <circle fill="#444" cx="76.3" cy="47.5" r="2"/> <circle fill="#444" cx="50.7" cy="47.6" r="2"/> <path fill="#444" d="M48.1 27.4c4.5 5.9 15.5 12.1 42.4 8.4-2.2-6.9-6.8-12.6-12.6-16.4C95.1 20.9 92 10 92 10c-1.4 5.5-11.1 4.4-11.1 4.4H62.1c-1.7-.1-3.4 0-5.2.3-12.8 1.8-22.6 11.1-25.7 22.9 10.6-1.9 15.3-7.6 16.9-10.2z"/> </svg>'
+  };
+});

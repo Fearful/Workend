@@ -1,0 +1,48 @@
+div(class='timesheet')
+ md-toolbar
+  md-toolbar-tools(layout='row', layout-padding)
+   span(flex='70')
+   div(flex='20')
+    md-input-container(style='padding: 0;margin-top: -15px;')
+     label {{'timesheet.search' | translate}}
+     input(type='text', ng-model='searchQuery')
+ md-content.canvas(layout-padding, id='board')
+  md-card.md-whiteframe-2dp(layout='row',style='height:100%;background:ghostwhite;overflow:hidden;', flex)
+   div(flex='100')
+    table(style='width:100%;')
+     thead
+      tr
+       th.md-headline {{'timesheet.project' | translate}}
+       th.md-headline {{'timesheet.item' | translate}}
+       th.md-headline {{'calendar.week.sudnay' | translate}}
+       th.md-headline {{'calendar.week.monday' | translate}}
+       th.md-headline {{'calendar.week.tuesday' | translate}}
+       th.md-headline {{'calendar.week.wednesday' | translate}}
+       th.md-headline {{'calendar.week.thursday' | translate}}
+       th.md-headline {{'calendar.week.friday' | translate}}
+       th.md-headline {{'calendar.week.saturday' | translate}}
+       th.md-headline {{'timesheet.total' | translate}}
+     tfoot
+      tr
+       td
+       td.md-headline {{'timesheet.total' | translate}}
+       td
+       td
+       td
+       td
+       td
+       td
+       td
+       td
+     tbody
+      tr(ng-repeat='item in timesheet.items')
+       td {{ item.sprint }}
+       td {{ item.name }}
+       td {{ item.hours }}
+       td {{ item.hours }}
+       td {{ item.hours }}
+       td {{ item.hours }}
+       td {{ item.hours }}
+       td {{ item.hours }}
+       td {{ item.hours }}
+       td {{ item.totalHours }}

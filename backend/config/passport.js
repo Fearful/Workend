@@ -5,6 +5,13 @@ var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var User = require('../models/user');
 var Project = require('../models/project');
+var Role = require('../models/permissions');
+var Permission = require('../models/permissions');
+var Issue = require('../../frontend/boards/api/models/issue');
+var Task = require('../../frontend/boards/api/models/task');
+var Task = require('../../frontend/pr0t0/api/models/prototype');
+var Product = require('../models/product');
+var Workspace = require('../models/workspace');
 // Serialize sessions
 passport.serializeUser(function(user, done) {
   done(null, user.id);
@@ -17,7 +24,7 @@ passport.deserializeUser(function(id, done) {
 });
 
 // Use local strategy
-passport.use(new LocalStrategy({
+passport.use('local', new LocalStrategy({
     usernameField: 'username',
     passwordField: 'password'
   },
@@ -74,8 +81,8 @@ passport.use(new GitHubStrategy({
           github: profile,
       }, function(err, numberAffected, rawResponse) {
          //handle it
-         console.log(numberAffected)
-         console.log(rawResponse)
+         // console.log(numberAffected)
+         // console.log(rawResponse)
          return done(null, profile);
       });
     });

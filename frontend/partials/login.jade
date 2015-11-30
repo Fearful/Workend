@@ -1,42 +1,53 @@
-block content
-  div
-    .login
-        div.logoContainer
-         div.logo
-          h1 WORKEND
-        md-tabs.md-accent(md-selected='data.selectedIndex')
-          md-tab#login(aria-controls='login-content')  Login 
-          md-tab#register(aria-controls='register-content')  Register 
-          md-tab#github(aria-controls='github-content')  Login with Github
-        ng-switch.tabpanel-container(on='data.selectedIndex')
-          #login-content(role='tabpanel', aria-labelledby='login', ng-switch-when='0', md-swipe-left='next()', md-swipe-right='previous()')
-            md-content
-              form
-               div(layout, layout-sm='column')
-                md-input-container(style='width:40%;')
-                 label Username
-                 input(ng-model='$root.username')
-                md-input-container(style='width:40%; margin-left: 10%;')
-                 label Password
-                 input(ng-model='$root.password', type='password')
-               div(layout, layout-sm='column')      
-                md-button.md-raised.md-primary(ng-click='login()', aria-labelledby='Login') Login
-          #register-content(role='tabpanel', aria-labelledby='register', ng-switch-when='1', md-swipe-left='next()', md-swipe-right='previous()')
-            md-content
-              form
-               div(layout, layout-sm='column')
-                md-input-container(style='width:40%;')
-                 label Username
-                 input(ng-model='$root.username')
-                md-input-container(style='width:40%; margin-left: 10%;')
-                 label Password
-                 input(ng-model='$root.password', type='password')
-               div(layout, layout-sm='column')      
-                md-input-container(style='width:40%;')
-                 label Email
-                 input(ng-model='$root.email')
-                md-button.md-raised.md-primary(ng-click='register()', aria-labelledby='Register', style='width:40%; margin-left: 10%;') Register
-          #github-content(role='tabpanel', aria-labelledby='github', ng-switch-when='2', md-swipe-left='next()', md-swipe-right='previous()')
-            md-content
-              form   
-                md-button.md-raised.md-primary(ng-click='githubLogin()', aria-labelledby='Github', style='width:80%; margin:0 8%;') Login
+div(layout='column',layout-padding, flex, layout-align="center center")
+ div.header
+  h2 Workend Access
+ div.md-whiteframe-10dp(ng-controller="login", aria-label='Login', class="loginDialog", style='min-width:450px;max-width:800px;')
+   form
+    md-toolbar
+     div.md-toolbar-tools(layout-padding, layout-align="space-between center")
+      h2 {{'login.message' | translate}} 
+      span(flex)
+      div(layout='row')
+       md-button(ng-click='switchLanguage("en_US")')
+        span {{'global.english' | translate}}
+       md-button(ng-click='switchLanguage("es_ES")')
+        span {{'global.spanish' | translate}}
+    md-dialog-content
+     md-tabs.md-accent(md-selected='data.selectedIndex')
+      md-tab#login(aria-controls='login-content')  {{'login.login' | translate}}
+      md-tab#register(aria-controls='register-content')  {{'login.register' | translate}}
+     ng-switch.tabpanel-container(on='data.selectedIndex')
+      #login-content(role='tabpanel', aria-labelledby='login', ng-switch-when='0', md-swipe-left='next()', md-swipe-right='previous()')
+       md-content(layout-padding)
+          form
+           div(layout="row", layout-sm='column', flex)
+            md-input-container(flex='45')
+             label {{'login.username' | translate}} 
+             input(ng-model='$root.username')
+            md-input-container(flex='45')
+             label {{'login.password' | translate}} 
+             input(ng-model='$root.password', type='password')
+      #register-content(role='tabpanel', aria-labelledby='register', ng-switch-when='1', md-swipe-left='next()', md-swipe-right='previous()')
+        md-content(layout-padding)
+          form
+           div(layout="row", layout-sm='column', flex)
+            md-input-container(flex='45')
+             label {{'login.username' | translate}} 
+             input(ng-model='$root.username')
+            md-input-container(flex='45')
+             label {{'login.password' | translate}} 
+             input(ng-model='$root.password', type='password')
+           div(layout="column", layout-sm='column')
+            md-input-container(flex)
+             label {{'login.email' | translate}} 
+             input(ng-model='$root.email')
+            md-input-container(flex)
+             label {{'login.companyName' | translate}} 
+             input(ng-model='$root.companyName')
+            md-input-container(flex)
+             label {{'login.description' | translate}} 
+             textarea(md-maxlength="600",columns="1",ng-model="$root.companyDescription")
+    div.md-actions(layout="row")
+        span(flex)
+        md-button.md-raised.md-primary(ng-show='data.selectedIndex === 0', ng-click='login()', aria-labelledby='Login',) {{'login.login' | translate}}
+        md-button.md-raised.md-primary(ng-show='data.selectedIndex === 1', ng-click='register()', aria-labelledby='Register',) {{'login.register' | translate}}
