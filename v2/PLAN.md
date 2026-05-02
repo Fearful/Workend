@@ -370,16 +370,136 @@ The intent: you can pause for days or weeks between stages without losing moment
 
 ---
 
+## Stage 15 — GitLab + Gitea OAuth (multi-provider)
+
+**Goal:** Sign in with GitLab or Gitea (in addition to GitHub), connect any combination of the three, and clone private repos from any connected provider — including self-hosted instances.
+
+**Why now:** Stage 9 baked GitHub-specific assumptions into 6+ places: the `oauth.GitHub` struct's hardcoded URLs, `project.lookupAuth`'s `strings.Contains(url, "github.com")` check, the web's `/auth/github/*` proxy routes, the env-var naming, the Settings UI, the user_tokens schema's missing refresh-token columns, and the lack of an `instance_url` for self-hosted servers. Adding even one more provider without lifting these forces copy-paste. With three providers in scope, the abstraction pays for itself immediately.
+
+### Current GitHub-specific code that needs lifting
+
+| Location | What's hardcoded |
+|---|---|
+| `internal/oauth/github.go` | URL constants, `Bearer` auth header, `/user` → `login` field shape |
+| `internal/oauth/handlers.go` | Handler methods on `*GitHub` directly, not on a Provider interface |
+| `internal/project/project.go:lookupAuth` | String-matches `"github.com"` to decide token use |
+| `internal/repo/clone.go:injectAuth` | Single `x-access-token:` injection scheme |
+| `internal/server/server.go` | `s.github` field, `if s.github != nil` block per route |
+| `internal/config/config.go` | GitHub-only env vars |
+| `internal/db/migrations/008_user_tokens.sql` | No `refresh_token`, no `expires_at`, no `instance_url` |
+| `web/src/routes/settings/+page.svelte` | One hardcoded "GitHub" panel |
+| `web/src/routes/auth/github/start/+server.ts` | One hardcoded provider in the URL |
+| `web/src/routes/auth/github/callback/+server.ts` | Same |
+
+### Provider differences that drive the abstraction
+
+| | **GitHub** | **GitLab** | **Gitea** |
+|---|---|---|---|
+| Instance URL | fixed `github.com` | configurable (defaults `gitlab.com`) | configurable (no default) |
+| Auth header | `Authorization: Bearer <token>` | `Authorization: Bearer <token>` | `Authorization: token <token>` |
+| User endpoint | `/user` → `.login` | `/api/v4/user` → `.username` | `/api/v1/user` → `.login` |
+| OAuth scopes (read user + repos) | `repo read:user` | `read_user read_repository write_repository api` | `repo read:user` |
+| Refresh tokens | not by default | yes | yes |
+| Clone URL token injection | `https://x-access-token:<tok>@host/...` | `https://oauth2:<tok>@host/...` | `https://<tok>:@host/...` |
+| Repo-list endpoint | `/user/repos?per_page=100` | `/api/v4/projects?membership=true&simple=true` | `/api/v1/user/repos` |
+
+### Definition of done
+
+- New `internal/oauth.Provider` interface:
+  ```go
+  type Provider interface {
+      Kind() string                     // "github" | "gitlab" | "gitea"
+      InstanceURL() string              // e.g. "https://gitlab.example.com"
+      AuthorizeURL(state string) string
+      ExchangeCode(ctx, code) (Token, error)
+      RefreshToken(ctx, refresh string) (Token, error)
+      FetchHandle(ctx, accessToken string) (string, error)
+      InjectCloneAuth(rawURL, accessToken string) string
+      OwnsHost(host string) bool        // for clone routing
+  }
+  type Token struct { Access, Refresh string; ExpiresAt *time.Time; Scopes string }
+  ```
+- New `internal/oauth.Registry` keyed by provider Kind, populated from config at startup. `s.providers` replaces `s.github` on the `Server`.
+- Migration **013_user_tokens_v2**: add `refresh_token BYTEA`, `expires_at TIMESTAMPTZ`, `instance_url TEXT NOT NULL DEFAULT ''`. Existing GitHub rows stay valid (instance_url defaults to `https://github.com`).
+- Three concrete provider implementations (`github.go`, `gitlab.go`, `gitea.go`) — each ~150 lines, mostly URL/header/field-name differences.
+- Per-provider OAuth handlers registered as `/api/auth/{provider}/start`, `/api/auth/{provider}/callback`, plus `/api/me/connections` (list all), `/api/me/connections/{provider}` (status/disconnect).
+- `project.lookupAuth` is rewritten: parse the git URL's host, ask each connected provider whether it owns that host (`OwnsHost`), use the first match's token. Multi-provider users with self-hosted instances now route correctly.
+- `repo.Clone` calls `provider.InjectCloneAuth(url, token)` — the URL injection scheme stops being a single hardcoded function.
+- A token-refresh middleware: when a provider's API call returns 401 *and* a refresh_token exists *and* `time.Now() > expires_at`, the refresh path runs once before retry. Failed refresh marks the row disconnected.
+- Web Settings page becomes a "Connections" panel that lists all configured providers; each shows connect/disconnect/handle. Driven by `GET /api/me/connections`.
+- Web `/auth/{provider}/start` and `/auth/{provider}/callback` proxy routes are parametrized — single dynamic route per direction, not three copies.
+- Compose `compose.yaml` adds env passthroughs for GitLab and Gitea: `WORKEND_GITLAB_CLIENT_ID/_SECRET/_URL`, `WORKEND_GITEA_CLIENT_ID/_SECRET/_URL`. All optional.
+- README and ARCHITECTURE updated.
+
+### Configuration story
+
+| Provider | Env vars | Notes |
+|---|---|---|
+| GitHub | `WORKEND_GITHUB_CLIENT_ID`, `WORKEND_GITHUB_CLIENT_SECRET` | Instance fixed to github.com |
+| GitLab | `WORKEND_GITLAB_CLIENT_ID`, `WORKEND_GITLAB_CLIENT_SECRET`, `WORKEND_GITLAB_URL` (default `https://gitlab.com`) | Self-hosted by setting URL |
+| Gitea | `WORKEND_GITEA_CLIENT_ID`, `WORKEND_GITEA_CLIENT_SECRET`, `WORKEND_GITEA_URL` (no default; required if client_id set) | Always self-hosted |
+| Shared | `WORKEND_TOKEN_KEY` (existing) | Same encryption key used for all providers' tokens |
+
+A provider is enabled only if its `_CLIENT_ID` and `_CLIENT_SECRET` are set. Workend boots fine with zero, one, two, or three.
+
+### Out of scope
+
+- Multiple instances of the same provider type (e.g., two different self-hosted GitLab servers). One instance per provider in v0.3 — revisit if real use demands it.
+- Repo browser UI (pick from a list when adding a project). Stage 16.
+- Webhook-driven sync from any provider. Stage 18 territory.
+- BitBucket. Easy to add later by implementing the `Provider` interface; not requested.
+- SSH-key-based clone. HTTPS+token only.
+- Automatic permission discovery (knowing whether the user can write to a given repo).
+
+### Key decisions to lock in here
+
+1. **One provider per kind, or multiple instances?** Recommend one per kind. Adding multi-instance support means making `provider` no longer a primary key on `user_tokens` and giving each instance an ID — bigger schema churn. Defer.
+2. **Token refresh: lazy (on 401) or proactive (background ticker)?** Recommend lazy. Ticker is more code; lazy works fine for interactive sessions and keeps the system stateless between requests.
+3. **Host-matching for clone auth: exact match or prefix?** Recommend host-equality (`u.Host == provider.InstanceHost()`). Simpler; matches what users expect. Don't try to match `gitlab.com` against `gitlab.com:8080` etc.
+4. **Existing rows on migration:** keep them. Set `instance_url='https://github.com'` for any pre-existing `provider='github'` row in the migration `Up`.
+
+### Demo
+
+- Configure all three providers in compose env (real credentials for github.com, gitlab.com, your-gitea-instance.local)
+- Sign in to Workend, go to Settings → Connections
+- Connect all three
+- Add a private project from each provider — clone succeeds, latest commit shows
+- Disconnect one — that provider's repos can no longer be cloned (error on next sync)
+- Reconnect — works again
+
+### Risks
+
+- **GitLab/Gitea response shapes drift between versions.** Pin tested versions in `versions.md`. The provider methods isolate parsing so a single-file change covers any future API shift.
+- **Self-hosted Gitea behind self-signed TLS.** Workend's HTTP client doesn't add custom CA bundles. Document that Gitea instances need a publicly-trusted cert OR users mount a custom CA bundle into the api container.
+- **Refresh-token race on concurrent API calls.** A naive lazy-refresh has a TOCTOU window. Mitigation: per-(user,provider) mutex around refresh, plus check `expires_at > now()` after acquiring the lock.
+
+---
+
+## Stage 16 — Repo browser & token refresh (post-Stage 15)
+
+**Goal:** When adding a project, pick from a list of repos in any connected provider instead of typing the URL.
+
+**Definition of done**
+- `GET /api/me/connections/:provider/repos` returns a paginated list of repos via the provider's repo-list endpoint
+- "Add project from connection" UI: select provider → list repos → click → fills `git_url` and `name` automatically
+- Token refresh middleware actually exercised (Stage 15 lays the groundwork; this stage is when refresh failures become user-visible)
+
+**Out of scope**
+- Filtering/searching across repos (basic list is enough)
+- Webhook setup from the repo browser (Stage 18)
+
+---
+
 ## Stages Beyond
 
 Captured here as headers only — fill in when relevant:
 
-- **Stage 15** — Task templates / shared Dagger modules from Daggerverse
-- **Stage 16** — Diff view between runs
-- **Stage 17** — Workspace sharing between users
-- **Stage 18** — Webhook-triggered syncs (push to repo → auto-sync → optional auto-run)
-- **Stage 19** — Backup/restore of the Workend instance
-- **Stage 20** — Plugin system for custom detectors / runners
+- **Stage 17** — Diff view between runs
+- **Stage 18** — Workspace sharing between users
+- **Stage 19** — Webhook-triggered syncs (push to repo → auto-sync → optional auto-run)
+- **Stage 20** — Backup/restore of the Workend instance
+- **Stage 21** — Plugin system for custom detectors / runners
+- **Stage 22** — Task templates / shared Dagger modules from Daggerverse
 
 ---
 
