@@ -17,22 +17,41 @@ import (
 	"workend/api/internal/oauth"
 	"workend/api/internal/project"
 	"workend/api/internal/run"
+	"workend/api/internal/schedule"
 	"workend/api/internal/stats"
 	"workend/api/internal/task"
 	"workend/api/internal/workspace"
 )
 
 type Server struct {
-	cfg    *config.Config
-	pool   *pgxpool.Pool
-	dagger *wdagger.Client
-	github *oauth.GitHub
-	logger *slog.Logger
+	cfg      *config.Config
+	pool     *pgxpool.Pool
+	dagger   *wdagger.Client
+	github   *oauth.GitHub
+	logger   *slog.Logger
+	auditLog *audit.Logger
+	runH     *run.Handlers
+	schedH   *schedule.Handlers
 }
 
 func New(cfg *config.Config, pool *pgxpool.Pool, dc *wdagger.Client, gh *oauth.GitHub, logger *slog.Logger) *Server {
-	return &Server{cfg: cfg, pool: pool, dagger: dc, github: gh, logger: logger}
+	auditLog := &audit.Logger{Pool: pool, Log: logger}
+	runH := &run.Handlers{
+		Pool: pool, Dagger: dc, LogsRoot: cfg.LogsRoot, Logger: logger, Audit: auditLog,
+	}
+	runH.Init()
+	schedH := schedule.NewHandlers(pool, dc, logger, auditLog)
+	return &Server{
+		cfg: cfg, pool: pool, dagger: dc, github: gh, logger: logger,
+		auditLog: auditLog, runH: runH, schedH: schedH,
+	}
 }
+
+// Schedules returns the schedule handlers (so main can start the ticker).
+func (s *Server) Schedules() *schedule.Handlers { return s.schedH }
+
+// Runs returns the run handlers (so the scheduler can enqueue runs).
+func (s *Server) Runs() *run.Handlers { return s.runH }
 
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
@@ -46,10 +65,9 @@ func (s *Server) Router() http.Handler {
 		DaggerSockPath: s.cfg.DaggerSockPath,
 	})
 
-	auditLog := &audit.Logger{Pool: s.pool, Log: s.logger}
-	authH := &auth.Handlers{Pool: s.pool, Secure: s.cfg.CookieSecure, Audit: auditLog}
+	authH := &auth.Handlers{Pool: s.pool, Secure: s.cfg.CookieSecure, Audit: s.auditLog}
 	wsH := &workspace.Handlers{Pool: s.pool}
-	adminH := &admin.Handlers{Pool: s.pool, Audit: auditLog}
+	adminH := &admin.Handlers{Pool: s.pool, Audit: s.auditLog}
 	projH := &project.Handlers{
 		Pool:      s.pool,
 		Dagger:    s.dagger,
@@ -59,14 +77,8 @@ func (s *Server) Router() http.Handler {
 	}
 	taskH := &task.Handlers{Pool: s.pool}
 	statsH := &stats.Handlers{Pool: s.pool}
-	runH := &run.Handlers{
-		Pool:     s.pool,
-		Dagger:   s.dagger,
-		LogsRoot: s.cfg.LogsRoot,
-		Logger:   s.logger,
-		Audit:    auditLog,
-	}
-	runH.Init()
+	runH := s.runH
+	schedH := s.schedH
 
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/auth/signup", authH.Signup)
@@ -105,6 +117,11 @@ func (s *Server) Router() http.Handler {
 			r.Get("/runs/{id}/log", runH.GetLog)
 			r.Get("/runs/{id}/log/stream", runH.Stream)
 			r.Post("/runs/{id}/cancel", runH.Cancel)
+
+			r.Get("/projects/{project_id}/schedules", schedH.ListByProject)
+			r.Post("/projects/{project_id}/schedules", schedH.Create)
+			r.Delete("/schedules/{id}", schedH.Delete)
+			r.Post("/schedules/{id}/toggle", schedH.Toggle)
 
 			r.Group(func(r chi.Router) {
 				r.Use(admin.RequireAdmin(s.pool))

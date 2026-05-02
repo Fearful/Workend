@@ -327,6 +327,7 @@
     {data.project.name}
   </h1>
   <div class="actions">
+    <a href={`/projects/${data.project.id}/schedules`}><button type="button" class="ghost">Schedules</button></a>
     <form method="POST" action="?/sync" style="margin: 0;">
       <button type="submit">Sync</button>
     </form>

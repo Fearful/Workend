@@ -237,6 +237,76 @@ func (h *Handlers) markFailed(runID uuid.UUID, exitCode int, msg string) {
 	h.markFinished(runID, StatusFailed, exitCode, time.Now())
 }
 
+// EnqueueForUser starts a run on behalf of a user (no HTTP context). Used
+// by the scheduler. Concurrent-run limit and per-task lock are still
+// enforced. Errors are returned for the caller to log.
+func (h *Handlers) EnqueueForUser(ctx context.Context, taskID uuid.UUID, ownerUserID uuid.UUID) error {
+	var (
+		spec       Spec
+		projectID  uuid.UUID
+		commitSHA  *string
+		projStatus string
+	)
+	err := h.Pool.QueryRow(ctx, `
+		SELECT t.source, t.name, t.raw_command,
+		       p.id, p.local_path, p.last_commit_sha, p.status
+		FROM tasks t
+		JOIN projects p   ON p.id = t.project_id
+		JOIN workspaces w ON w.id = p.workspace_id
+		WHERE t.id = $1 AND w.user_id = $2
+	`, taskID, ownerUserID).Scan(&spec.Source, &spec.Name, &spec.RawCommand,
+		&projectID, &spec.RepoPath, &commitSHA, &projStatus)
+	if err != nil {
+		return fmt.Errorf("load task: %w", err)
+	}
+	if projStatus != "ready" || spec.RepoPath == "" {
+		return errors.New("project not ready")
+	}
+
+	var activeForUser int
+	if err := h.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM runs r
+		JOIN projects p   ON p.id = r.project_id
+		JOIN workspaces w ON w.id = p.workspace_id
+		WHERE w.user_id = $1 AND r.status IN ('queued', 'running')
+	`, ownerUserID).Scan(&activeForUser); err == nil && activeForUser >= MaxConcurrentRunsPerUser {
+		return fmt.Errorf("concurrent run limit reached for user")
+	}
+
+	h.mu.Lock()
+	if _, busy := h.running[taskID]; busy {
+		h.mu.Unlock()
+		return errors.New("task already running")
+	}
+
+	var runID uuid.UUID
+	err = h.Pool.QueryRow(ctx, `
+		INSERT INTO runs (task_id, project_id, commit_sha, status, log_path)
+		VALUES ($1, $2, $3, $4, '')
+		RETURNING id
+	`, taskID, projectID, commitSHA, StatusQueued).Scan(&runID)
+	if err != nil {
+		h.mu.Unlock()
+		return fmt.Errorf("insert run: %w", err)
+	}
+	spec.LogFile = filepath.Join(h.LogsRoot, runID.String()+".log")
+	if _, err := h.Pool.Exec(ctx,
+		`UPDATE runs SET log_path = $1 WHERE id = $2`, spec.LogFile, runID); err != nil {
+		h.mu.Unlock()
+		return fmt.Errorf("set log path: %w", err)
+	}
+	h.running[taskID] = runID
+	h.mu.Unlock()
+
+	if h.Audit != nil {
+		h.Audit.Record(ctx, ownerUserID, audit.RunStart, "run", runID.String(), "scheduler",
+			map[string]any{"task_id": taskID.String(), "task_name": spec.Name, "task_source": spec.Source, "via": "schedule"})
+	}
+
+	go h.executeAsync(taskID, runID, spec)
+	return nil
+}
+
 // Cancel signals the executing goroutine to abort.
 // POST /api/runs/:id/cancel
 func (h *Handlers) Cancel(w http.ResponseWriter, r *http.Request) {

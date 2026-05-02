@@ -77,6 +77,9 @@ func main() {
 
 	srv := server.New(cfg, pool, dc, gh, logger)
 
+	stopScheduler := srv.Schedules().StartTicker(ctx, srv.Runs().EnqueueForUser)
+	defer stopScheduler()
+
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Router(),
