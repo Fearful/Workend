@@ -72,7 +72,8 @@ func userOwnsProject(ctx context.Context, pool *pgxpool.Pool, uid, pid uuid.UUID
 	err := pool.QueryRow(ctx, `
 		SELECT 1 FROM projects p
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE p.id = $1 AND w.user_id = $2
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE p.id = $1 AND m.user_id = $2
 	`, pid, uid).Scan(&n)
 	return err == nil
 }

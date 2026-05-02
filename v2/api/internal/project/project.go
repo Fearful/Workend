@@ -250,8 +250,10 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) userOwnsWorkspace(ctx context.Context, uid, wsID uuid.UUID) bool {
 	var n int
-	if err := h.Pool.QueryRow(ctx,
-		`SELECT 1 FROM workspaces WHERE id = $1 AND user_id = $2`, wsID, uid).Scan(&n); err != nil {
+	if err := h.Pool.QueryRow(ctx, `
+		SELECT 1 FROM workspace_members
+		WHERE workspace_id = $1 AND user_id = $2
+	`, wsID, uid).Scan(&n); err != nil {
 		return false
 	}
 	return true
@@ -265,7 +267,8 @@ func (h *Handlers) fetchOwned(ctx context.Context, uid, pid uuid.UUID) (*Project
 		       p.last_synced_at, p.created_at, p.updated_at
 		FROM projects p
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE p.id = $1 AND w.user_id = $2
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE p.id = $1 AND m.user_id = $2
 	`, pid, uid).Scan(&p.ID, &p.WorkspaceID, &p.Name, &p.GitURL, &p.DefaultBranch, &p.LocalPath,
 		&p.Status, &p.LastCommitSHA, &p.LastCommitMessage, &p.LastCommitAuthor,
 		&p.LastSyncedAt, &p.CreatedAt, &p.UpdatedAt)

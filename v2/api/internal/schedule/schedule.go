@@ -276,7 +276,8 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		  AND project_id IN (
 		    SELECT p.id FROM projects p
 		    JOIN workspaces w ON w.id = p.workspace_id
-		    WHERE w.user_id = $2
+		    JOIN workspace_members m ON m.workspace_id = w.id
+		    WHERE m.user_id = $2
 		  )
 	`, id, uid)
 	if err != nil {
@@ -308,7 +309,8 @@ func (h *Handlers) Toggle(w http.ResponseWriter, r *http.Request) {
 		  AND s.project_id IN (
 		    SELECT p.id FROM projects p
 		    JOIN workspaces w ON w.id = p.workspace_id
-		    WHERE w.user_id = $2
+		    JOIN workspace_members m ON m.workspace_id = w.id
+		    WHERE m.user_id = $2
 		  )
 		RETURNING enabled, cron_expr
 	`, id, uid).Scan(&newEnabled, &expr)
@@ -338,7 +340,8 @@ func userOwnsProject(ctx context.Context, pool *pgxpool.Pool, uid, pid uuid.UUID
 	err := pool.QueryRow(ctx, `
 		SELECT 1 FROM projects p
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE p.id = $1 AND w.user_id = $2
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE p.id = $1 AND m.user_id = $2
 	`, pid, uid).Scan(&n)
 	return err == nil
 }

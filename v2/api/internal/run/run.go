@@ -96,7 +96,8 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		FROM tasks t
 		JOIN projects p   ON p.id = t.project_id
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE t.id = $1 AND w.user_id = $2
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE t.id = $1 AND m.user_id = $2
 	`, taskID, uid).Scan(&spec.Source, &spec.Name, &spec.RawCommand,
 		&projectID, &spec.RepoPath, &commitSHA, &projStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -118,7 +119,8 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		SELECT COUNT(*) FROM runs r
 		JOIN projects p   ON p.id = r.project_id
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE w.user_id = $1 AND r.status IN ('queued', 'running')
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE m.user_id = $1 AND r.status IN ('queued', 'running')
 	`, uid).Scan(&activeForUser); err == nil && activeForUser >= MaxConcurrentRunsPerUser {
 		http.Error(w, "concurrent run limit reached", http.StatusTooManyRequests)
 		return
@@ -392,7 +394,8 @@ func (h *Handlers) EnqueueForUser(ctx context.Context, taskID uuid.UUID, ownerUs
 		FROM tasks t
 		JOIN projects p   ON p.id = t.project_id
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE t.id = $1 AND w.user_id = $2
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE t.id = $1 AND m.user_id = $2
 	`, taskID, ownerUserID).Scan(&spec.Source, &spec.Name, &spec.RawCommand,
 		&projectID, &spec.RepoPath, &commitSHA, &projStatus)
 	if err != nil {
@@ -407,7 +410,8 @@ func (h *Handlers) EnqueueForUser(ctx context.Context, taskID uuid.UUID, ownerUs
 		SELECT COUNT(*) FROM runs r
 		JOIN projects p   ON p.id = r.project_id
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE w.user_id = $1 AND r.status IN ('queued', 'running')
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE m.user_id = $1 AND r.status IN ('queued', 'running')
 	`, ownerUserID).Scan(&activeForUser); err == nil && activeForUser >= MaxConcurrentRunsPerUser {
 		return fmt.Errorf("concurrent run limit reached for user")
 	}
@@ -748,7 +752,8 @@ func (h *Handlers) ListForUser(w http.ResponseWriter, r *http.Request) {
 		JOIN tasks t      ON t.id = r.task_id
 		JOIN projects p   ON p.id = r.project_id
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE w.user_id = $1
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE m.user_id = $1
 		ORDER BY r.created_at DESC
 		LIMIT $2
 	`, uid, limit)
@@ -802,7 +807,8 @@ func (h *Handlers) fetchOwned(ctx context.Context, uid, runID uuid.UUID) (*Run, 
 		JOIN tasks t      ON t.id = r.task_id
 		JOIN projects p   ON p.id = r.project_id
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE r.id = $1 AND w.user_id = $2
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE r.id = $1 AND m.user_id = $2
 	`, runID, uid).Scan(&run.ID, &run.TaskID, &run.ProjectID, &run.CommitSHA, &run.Status,
 		&run.StartedAt, &run.FinishedAt, &run.ExitCode, &run.LogPath,
 		&run.CreatedAt, &run.UpdatedAt,
@@ -818,7 +824,8 @@ func userOwnsProject(ctx context.Context, pool *pgxpool.Pool, uid, pid uuid.UUID
 	err := pool.QueryRow(ctx, `
 		SELECT 1 FROM projects p
 		JOIN workspaces w ON w.id = p.workspace_id
-		WHERE p.id = $1 AND w.user_id = $2
+		JOIN workspace_members m ON m.workspace_id = w.id
+		WHERE p.id = $1 AND m.user_id = $2
 	`, pid, uid).Scan(&n)
 	return err == nil
 }

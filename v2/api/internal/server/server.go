@@ -123,6 +123,9 @@ func (s *Server) Router() http.Handler {
 			r.Post("/workspaces", wsH.Create)
 			r.Get("/workspaces/{id}", wsH.Get)
 			r.Delete("/workspaces/{id}", wsH.Delete)
+			r.Get("/workspaces/{id}/members", wsH.ListMembers)
+			r.Post("/workspaces/{id}/members", wsH.AddMember)
+			r.Delete("/workspaces/{id}/members/{user_id}", wsH.RemoveMember)
 
 			r.Get("/workspaces/{workspace_id}/projects", projH.List)
 			r.Post("/workspaces/{workspace_id}/projects", projH.Create)
