@@ -1,0 +1,26 @@
+[
+  {
+    "source": "make",
+    "manifest": "Makefile",
+    "image": "alpine:3.20",
+    "setup": ["apk add --no-cache make gawk"],
+    "detect_cmd": "make -pRrq : 2>/dev/null | awk -F: '/^[a-zA-Z0-9][^$#\\/\\t=]*:([^=]|$)/ {split($1, A, \" \"); for(i in A) print A[i]}' | sort -u | grep -vE '^(Makefile|\\.PHONY|\\.DEFAULT|\\.SUFFIXES)$'",
+    "run_cmd_template": "make {{name}}"
+  },
+  {
+    "source": "cargo",
+    "manifest": "Cargo.toml",
+    "image": "rust:1-alpine",
+    "setup": [],
+    "detect_cmd": "echo 'build\\ntest\\ncheck\\nrun\\nclippy'",
+    "run_cmd_template": "cargo {{name}}"
+  },
+  {
+    "source": "taskfile",
+    "manifest": "Taskfile.yml",
+    "image": "alpine:3.20",
+    "setup": ["wget -qO- https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin"],
+    "detect_cmd": "task --list-all 2>/dev/null | tail -n +2 | awk '{print $1}' | sed 's/:$//'",
+    "run_cmd_template": "task {{name}}"
+  }
+]

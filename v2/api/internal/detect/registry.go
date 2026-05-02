@@ -9,14 +9,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// AllDetectors returns the list of detectors run on every project sync.
-// Add new sources here.
-func AllDetectors() []Detector {
+// builtinDetectors are the always-on detectors compiled in to the binary.
+func builtinDetectors() []Detector {
 	return []Detector{
 		NPM{},
 		Just{},
 		Dockerfile{},
 	}
+}
+
+// active is the registry of detectors actually used by Run().
+// Populated by InitDetectors at startup with builtins + any user-defined
+// custom detectors loaded from WORKEND_DETECTORS_FILE.
+var active = builtinDetectors()
+
+// InitDetectors swaps the active list to include user-defined custom
+// detectors after the dagger client is available.
+func InitDetectors(extras []Detector) {
+	active = append(builtinDetectors(), extras...)
+}
+
+// AllDetectors returns the active set.
+func AllDetectors() []Detector {
+	return active
 }
 
 // Run runs every detector against the project's local clone, then atomically

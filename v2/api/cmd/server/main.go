@@ -12,6 +12,7 @@ import (
 	"workend/api/internal/config"
 	wdagger "workend/api/internal/dagger"
 	"workend/api/internal/db"
+	"workend/api/internal/detect"
 	"workend/api/internal/oauth"
 	"workend/api/internal/secret"
 	"workend/api/internal/server"
@@ -51,6 +52,20 @@ func main() {
 			logger.Warn("dagger close", "err", err)
 		}
 	}()
+
+	customDetectors, err := detect.LoadCustom(dc)
+	if err != nil {
+		logger.Error("custom detectors load failed", "err", err)
+		os.Exit(1)
+	}
+	if len(customDetectors) > 0 {
+		detect.InitDetectors(customDetectors)
+		names := make([]string, 0, len(customDetectors))
+		for _, d := range customDetectors {
+			names = append(names, d.Name())
+		}
+		logger.Info("custom detectors loaded", "detectors", names)
+	}
 
 	providers, err := oauth.LoadConfig(cfg.WebPublicURL)
 	if err != nil {

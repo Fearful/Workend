@@ -77,6 +77,9 @@ services:
       # file in via the volumes section below):
       WORKEND_PROVIDERS_FILE:       "${WORKEND_PROVIDERS_FILE:-}"
       WORKEND_TOKEN_KEY:            "${WORKEND_TOKEN_KEY:-}"
+      # Stage 21: optional custom detectors. Path to a JSON file inside the
+      # api container; mount it via the volumes section if you set this.
+      WORKEND_DETECTORS_FILE:       "${WORKEND_DETECTORS_FILE:-}"
       # Public URL the web frontend is reachable at (used for run links in
       # notifications). Defaults to localhost:3000 for local dev.
       WORKEND_WEB_PUBLIC_URL: "${WORKEND_WEB_PUBLIC_URL:-http://localhost:3000}"
