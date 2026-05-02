@@ -14,6 +14,7 @@ import (
 	"workend/api/internal/health"
 	"workend/api/internal/project"
 	"workend/api/internal/run"
+	"workend/api/internal/stats"
 	"workend/api/internal/task"
 	"workend/api/internal/workspace"
 )
@@ -50,6 +51,7 @@ func (s *Server) Router() http.Handler {
 		Logger:    s.logger,
 	}
 	taskH := &task.Handlers{Pool: s.pool}
+	statsH := &stats.Handlers{Pool: s.pool}
 	runH := &run.Handlers{
 		Pool:     s.pool,
 		Dagger:   s.dagger,
@@ -77,6 +79,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/projects/{id}", projH.Get)
 			r.Delete("/projects/{id}", projH.Delete)
 			r.Post("/projects/{id}/sync", projH.Sync)
+			r.Get("/projects/{id}/stats", statsH.GetLatest)
 
 			r.Get("/projects/{project_id}/tasks", taskH.ListByProject)
 			r.Get("/projects/{project_id}/runs", runH.ListByProject)

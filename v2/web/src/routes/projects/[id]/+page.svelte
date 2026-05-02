@@ -67,6 +67,15 @@
     }
     return groups;
   });
+
+  let topLangs = $derived.by(() => {
+    if (!data.stats) return [];
+    return Object.entries(data.stats.languages)
+      .sort((a, b) => b[1].lines - a[1].lines)
+      .slice(0, 6);
+  });
+
+  let totalLangLines = $derived(data.stats?.total_lines || 1);
 </script>
 
 <style>
@@ -201,6 +210,67 @@
     padding: 1.5rem;
   }
 
+  .lang-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 80px 50px;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.375rem 0;
+    font-size: 0.8125rem;
+  }
+
+  .lang-name {
+    color: #e8eaed;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .lang-bar {
+    height: 6px;
+    background: #1f2429;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .lang-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2563eb, #60a5fa);
+    border-radius: 3px;
+  }
+
+  .lang-num {
+    color: #9ca3af;
+    font-size: 0.75rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    text-align: right;
+  }
+
+  .stats-summary {
+    display: flex;
+    gap: 1.5rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid #1f2429;
+  }
+
+  .stat-block {
+    flex: 1;
+  }
+
+  .stat-num {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #e8eaed;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .stat-label {
+    color: #6b7280;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.125rem;
+  }
+
   .run-row {
     display: grid;
     grid-template-columns: auto 1fr auto auto auto;
@@ -285,6 +355,34 @@
   <div class="row"><span class="label">Message</span><span class="value commit-msg">{data.project.last_commit_message || '—'}</span></div>
   <div class="row"><span class="label">Synced</span><span class="value">{data.project.last_synced_at ? new Date(data.project.last_synced_at).toLocaleString() : '—'}</span></div>
 </section>
+
+{#if data.stats}
+  <section class="panel">
+    <h2>Code statistics</h2>
+    <div class="stats-summary">
+      <div class="stat-block">
+        <div class="stat-num">{data.stats.total_files.toLocaleString()}</div>
+        <div class="stat-label">Files</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-num">{data.stats.total_lines.toLocaleString()}</div>
+        <div class="stat-label">Lines</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-num">{data.stats.total_code.toLocaleString()}</div>
+        <div class="stat-label">Code</div>
+      </div>
+    </div>
+    {#each topLangs as [name, l] (name)}
+      <div class="lang-row">
+        <span class="lang-name">{name}</span>
+        <div class="lang-bar"><div class="lang-bar-fill" style="width: {(l.lines / totalLangLines) * 100}%"></div></div>
+        <span class="lang-num">{l.lines.toLocaleString()} lines</span>
+        <span class="lang-num">{l.files} files</span>
+      </div>
+    {/each}
+  </section>
+{/if}
 
 <section class="panel">
   <h2>Tasks</h2>

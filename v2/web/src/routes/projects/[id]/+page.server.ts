@@ -46,6 +46,22 @@ interface Run {
   created_at: string;
 }
 
+interface Lang {
+  files: number;
+  lines: number;
+  code: number;
+  comments: number;
+  blanks: number;
+}
+
+interface Stats {
+  computed_at: string;
+  total_files: number;
+  total_lines: number;
+  total_code: number;
+  languages: Record<string, Lang>;
+}
+
 export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   if (!locals.user) throw redirect(303, '/login');
   const cookie = cookies.get(SESSION_COOKIE);
@@ -55,17 +71,19 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   if (projResult.status === 404) throw error(404, 'project not found');
   if (!projResult.ok || !projResult.data) throw error(500, projResult.error || 'failed to load');
 
-  const [wsResult, tasksResult, runsResult] = await Promise.all([
+  const [wsResult, tasksResult, runsResult, statsResult] = await Promise.all([
     apiFetch<Workspace>(`/api/workspaces/${projResult.data.workspace_id}`, { cookie: cookieHeader }),
     apiFetch<Task[]>(`/api/projects/${params.id}/tasks`, { cookie: cookieHeader }),
-    apiFetch<Run[]>(`/api/projects/${params.id}/runs`, { cookie: cookieHeader })
+    apiFetch<Run[]>(`/api/projects/${params.id}/runs`, { cookie: cookieHeader }),
+    apiFetch<Stats | null>(`/api/projects/${params.id}/stats`, { cookie: cookieHeader })
   ]);
 
   return {
     project: projResult.data,
     workspace: wsResult.ok ? (wsResult.data ?? null) : null,
     tasks: tasksResult.ok ? (tasksResult.data ?? []) : [],
-    runs: runsResult.ok ? (runsResult.data ?? []) : []
+    runs: runsResult.ok ? (runsResult.data ?? []) : [],
+    stats: statsResult.ok ? (statsResult.data ?? null) : null
   };
 };
 

@@ -23,6 +23,7 @@ import (
 	wdagger "workend/api/internal/dagger"
 	"workend/api/internal/detect"
 	"workend/api/internal/repo"
+	"workend/api/internal/stats"
 )
 
 const (
@@ -325,6 +326,8 @@ func (h *Handlers) cloneAsync(projectID, workspaceID uuid.UUID, gitURL, branch s
 	if err := detect.Run(ctx, h.Pool, h.Logger, projectID, result.LocalPath); err != nil {
 		h.Logger.Warn("task detection failed", "project", projectID, "err", err)
 	}
+
+	stats.Run(ctx, h.Dagger, h.Pool, h.Logger, projectID, result.LocalPath)
 }
 
 func (h *Handlers) markError(projectID uuid.UUID, err error) {
