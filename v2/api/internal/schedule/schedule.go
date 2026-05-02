@@ -85,9 +85,24 @@ func (h *Handlers) loop(ctx context.Context, enqueue Enqueue) {
 	}
 }
 
+// tick claims due schedules using SELECT ... FOR UPDATE SKIP LOCKED so that
+// when multiple API replicas are running, each due schedule is claimed by
+// exactly one replica per tick. Inside the same transaction we advance
+// next_run_at, which makes the claim durable across restarts.
 func (h *Handlers) tick(ctx context.Context, enqueue Enqueue) {
-	rows, err := h.Pool.Query(ctx, `
-		SELECT s.id, s.task_id, s.project_id, s.cron_expr, s.created_by, w.user_id
+	type due struct {
+		id, taskID, projectID, userID uuid.UUID
+		expr                          string
+	}
+	var dues []due
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		h.Logger.Warn("schedule tick begin tx failed", "err", err)
+		return
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT s.id, s.task_id, s.project_id, s.cron_expr, w.user_id
 		FROM schedules s
 		JOIN projects p   ON p.id = s.project_id
 		JOIN workspaces w ON w.id = p.workspace_id
@@ -96,21 +111,16 @@ func (h *Handlers) tick(ctx context.Context, enqueue Enqueue) {
 		  AND s.next_run_at <= now()
 		ORDER BY s.next_run_at ASC
 		LIMIT 50
+		FOR UPDATE OF s SKIP LOCKED
 	`)
 	if err != nil {
+		_ = tx.Rollback(ctx)
 		h.Logger.Warn("schedule tick query failed", "err", err)
 		return
 	}
-	defer rows.Close()
-
-	type due struct {
-		id, taskID, projectID, createdBy, userID uuid.UUID
-		expr                                     string
-	}
-	var dues []due
 	for rows.Next() {
 		var d due
-		if err := rows.Scan(&d.id, &d.taskID, &d.projectID, &d.expr, &d.createdBy, &d.userID); err != nil {
+		if err := rows.Scan(&d.id, &d.taskID, &d.projectID, &d.expr, &d.userID); err != nil {
 			h.Logger.Warn("schedule scan failed", "err", err)
 			continue
 		}
@@ -118,20 +128,29 @@ func (h *Handlers) tick(ctx context.Context, enqueue Enqueue) {
 	}
 	rows.Close()
 
+	now := time.Now()
 	for _, d := range dues {
-		next, err := h.computeNext(d.expr, time.Now())
+		next, err := h.computeNext(d.expr, now)
 		if err != nil {
 			h.Logger.Warn("schedule cron parse failed", "schedule", d.id, "err", err)
 			continue
 		}
-		now := time.Now()
-		if _, err := h.Pool.Exec(ctx, `
+		if _, err := tx.Exec(ctx, `
 			UPDATE schedules SET last_run_at = $1, next_run_at = $2, updated_at = now()
 			WHERE id = $3
 		`, now, next, d.id); err != nil {
 			h.Logger.Warn("schedule advance failed", "schedule", d.id, "err", err)
-			continue
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		h.Logger.Warn("schedule tick commit failed", "err", err)
+		return
+	}
+
+	// Enqueue OUTSIDE the tx so the row locks release immediately and a
+	// long-running enqueue doesn't block a sibling replica's next tick.
+	for _, d := range dues {
 		if err := enqueue(ctx, d.taskID, d.userID); err != nil {
 			h.Logger.Warn("schedule enqueue failed", "schedule", d.id, "task", d.taskID, "err", err)
 		}
