@@ -1,36 +1,50 @@
-import { redirect } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { apiFetch } from '$lib/api';
 
 const SESSION_COOKIE = 'workend_session';
 
-interface GHStatus {
+interface ConnectionView {
+  provider_id: string;
+  provider: string;
+  instance_url: string;
+  instance_host: string;
   connected: boolean;
   handle?: string;
   scopes?: string;
+  connected_at?: string;
+  connection_id?: string;
 }
 
-export const load: PageServerLoad = async ({ locals, cookies }) => {
+export const load: PageServerLoad = async ({ locals, cookies, url }) => {
   if (!locals.user) throw redirect(303, '/login');
   const cookie = cookies.get(SESSION_COOKIE);
   const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
 
-  const gh = await apiFetch<GHStatus>('/api/me/github', { cookie: cookieHeader });
-  const ghStatus: GHStatus = gh.ok && gh.data ? gh.data : { connected: false };
-  // 404-style "not configured" surfaces as a 404 from the api when the
-  // endpoint isn't registered. Treat as "not configured."
-  const ghEnabled = gh.status !== 404;
+  const result = await apiFetch<ConnectionView[]>('/api/me/connections', { cookie: cookieHeader });
+  // The endpoint isn't registered when no providers are configured at all.
+  const providersConfigured = result.status !== 404;
 
-  return { ghStatus, ghEnabled };
+  return {
+    connections: result.ok ? (result.data ?? []) : [],
+    providersConfigured,
+    flash: {
+      connected: url.searchParams.get('connected'),
+      error: url.searchParams.get('conn_error')
+    }
+  };
 };
 
 export const actions: Actions = {
-  disconnectGithub: async ({ cookies }) => {
+  disconnect: async ({ request, cookies }) => {
     const cookie = cookies.get(SESSION_COOKIE);
-    await apiFetch('/api/me/github', {
+    const id = String((await request.formData()).get('id') || '');
+    if (!id) return fail(400, { error: 'id required' });
+    const result = await apiFetch(`/api/me/connections/${id}`, {
       method: 'DELETE',
       cookie: cookie ? `${SESSION_COOKIE}=${cookie}` : undefined
     });
+    if (!result.ok) return fail(result.status, { error: result.error || 'disconnect failed' });
     return { disconnected: true };
   }
 };

@@ -53,7 +53,7 @@ type Project struct {
 type Handlers struct {
 	Pool      *pgxpool.Pool
 	Dagger    *wdagger.Client
-	GitHub    *oauth.GitHub // optional; nil if OAuth not configured
+	OAuth     *oauth.Registry // nil-safe; provider lookup returns no token when nil
 	ReposRoot string
 	Logger    *slog.Logger
 }
@@ -336,18 +336,14 @@ func (h *Handlers) cloneAsync(userID, projectID, workspaceID uuid.UUID, gitURL, 
 
 // lookupAuth returns a stored OAuth token if the URL points at a provider
 // the user has connected. Empty string means "no auth" (public clone path).
+//
+// Stage 15: routes via the multi-provider registry. Host-equality match
+// against each registered provider's instance host.
 func (h *Handlers) lookupAuth(ctx context.Context, userID uuid.UUID, gitURL string) string {
-	if h.GitHub == nil {
+	if h.OAuth == nil {
 		return ""
 	}
-	if !strings.Contains(gitURL, "github.com") {
-		return ""
-	}
-	tok, err := h.GitHub.Token(ctx, userID.String())
-	if err != nil {
-		return ""
-	}
-	return tok
+	return h.OAuth.AccessTokenForCloneURL(ctx, userID, gitURL)
 }
 
 func (h *Handlers) markError(projectID uuid.UUID, err error) {

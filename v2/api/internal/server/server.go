@@ -30,7 +30,7 @@ type Server struct {
 	cfg      *config.Config
 	pool     *pgxpool.Pool
 	dagger   *wdagger.Client
-	github   *oauth.GitHub
+	oauth    *oauth.Registry
 	logger   *slog.Logger
 	auditLog *audit.Logger
 	notif    *notify.Dispatcher
@@ -38,7 +38,7 @@ type Server struct {
 	schedH   *schedule.Handlers
 }
 
-func New(cfg *config.Config, pool *pgxpool.Pool, dc *wdagger.Client, gh *oauth.GitHub, logger *slog.Logger) *Server {
+func New(cfg *config.Config, pool *pgxpool.Pool, dc *wdagger.Client, oauthReg *oauth.Registry, logger *slog.Logger) *Server {
 	auditLog := &audit.Logger{Pool: pool, Log: logger}
 
 	var smtpCfg *notify.SMTP
@@ -57,7 +57,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, dc *wdagger.Client, gh *oauth.G
 	runH.Init()
 	schedH := schedule.NewHandlers(pool, dc, logger, auditLog)
 	return &Server{
-		cfg: cfg, pool: pool, dagger: dc, github: gh, logger: logger,
+		cfg: cfg, pool: pool, dagger: dc, oauth: oauthReg, logger: logger,
 		auditLog: auditLog, notif: notif, runH: runH, schedH: schedH,
 	}
 }
@@ -86,7 +86,7 @@ func (s *Server) Router() http.Handler {
 	projH := &project.Handlers{
 		Pool:      s.pool,
 		Dagger:    s.dagger,
-		GitHub:    s.github,
+		OAuth:     s.oauth,
 		ReposRoot: s.cfg.ReposRoot,
 		Logger:    s.logger,
 	}
@@ -107,11 +107,16 @@ func (s *Server) Router() http.Handler {
 			r.Use(auth.RequireUser(s.pool))
 			r.Get("/me", authH.Me)
 
-			if s.github != nil {
-				r.Post("/auth/github/start", s.github.HandleStart)
-				r.Get("/auth/github/callback", s.github.HandleCallback)
-				r.Get("/me/github", s.github.HandleStatus)
-				r.Delete("/me/github", s.github.HandleDisconnect)
+			if s.oauth != nil && len(s.oauth.All()) > 0 {
+				oauthH := &oauth.Handlers{
+					Registry:     s.oauth,
+					RedirectBase: s.cfg.WebPublicURL,
+					Secure:       s.cfg.CookieSecure,
+				}
+				r.Post("/auth/{provider}/start", oauthH.Start)
+				r.Get("/auth/{provider}/callback", oauthH.Callback)
+				r.Get("/me/connections", oauthH.ListConnections)
+				r.Delete("/me/connections/{id}", oauthH.DeleteConnection)
 			}
 
 			r.Get("/workspaces", wsH.List)

@@ -52,10 +52,15 @@ func main() {
 		}
 	}()
 
-	var gh *oauth.GitHub
-	if cfg.GitHubClientID != "" && cfg.GitHubClientSecret != "" {
+	providers, err := oauth.LoadConfig(cfg.WebPublicURL)
+	if err != nil {
+		logger.Error("oauth config load failed", "err", err)
+		os.Exit(1)
+	}
+	var oauthReg *oauth.Registry
+	if len(providers) > 0 {
 		if cfg.TokenKey == "" {
-			logger.Error("WORKEND_TOKEN_KEY required when GitHub OAuth is configured")
+			logger.Error("WORKEND_TOKEN_KEY required when any OAuth provider is configured")
 			os.Exit(1)
 		}
 		box, err := secret.NewBox(cfg.TokenKey)
@@ -63,19 +68,15 @@ func main() {
 			logger.Error("token key invalid", "err", err)
 			os.Exit(1)
 		}
-		gh = &oauth.GitHub{
-			Pool:         pool,
-			Box:          box,
-			ClientID:     cfg.GitHubClientID,
-			ClientSecret: cfg.GitHubClientSecret,
-			RedirectURL:  cfg.GitHubRedirectURL,
-			Scopes:       []string{"repo", "read:user"},
-			Secure:       cfg.CookieSecure,
+		oauthReg = oauth.NewRegistry(pool, box, providers)
+		ids := make([]string, 0, len(providers))
+		for _, p := range providers {
+			ids = append(ids, p.ID())
 		}
-		logger.Info("github oauth enabled")
+		logger.Info("oauth providers configured", "providers", ids)
 	}
 
-	srv := server.New(cfg, pool, dc, gh, logger)
+	srv := server.New(cfg, pool, dc, oauthReg, logger)
 
 	stopScheduler := srv.Schedules().StartTicker(ctx, srv.Runs().EnqueueForUser)
 	defer stopScheduler()

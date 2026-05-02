@@ -13,10 +13,11 @@ type Config struct {
 	LogsRoot       string
 	CookieSecure   bool
 
-	TokenKey           string // base64 32-byte key for at-rest encryption
-	GitHubClientID     string
-	GitHubClientSecret string
-	GitHubRedirectURL  string
+	TokenKey string // base64 32-byte key for at-rest encryption
+
+	// OAuth provider configuration is loaded directly by the oauth package
+	// from env vars (per-provider) or a JSON file (multi-instance). See
+	// oauth.LoadConfig for the env-var names.
 
 	WebPublicURL string
 	SMTPHost     string
@@ -34,10 +35,7 @@ func Load() (*Config, error) {
 		LogsRoot:       getEnv("WORKEND_LOGS_ROOT", "/var/lib/workend/logs"),
 		CookieSecure:   getEnv("WORKEND_COOKIE_SECURE", "false") == "true",
 
-		TokenKey:           os.Getenv("WORKEND_TOKEN_KEY"),
-		GitHubClientID:     os.Getenv("WORKEND_GITHUB_CLIENT_ID"),
-		GitHubClientSecret: os.Getenv("WORKEND_GITHUB_CLIENT_SECRET"),
-		GitHubRedirectURL:  getEnv("WORKEND_GITHUB_REDIRECT_URL", "http://localhost:3000/auth/github/callback"),
+		TokenKey: os.Getenv("WORKEND_TOKEN_KEY"),
 
 		WebPublicURL: getEnv("WORKEND_WEB_PUBLIC_URL", "http://localhost:3000"),
 		SMTPHost:     os.Getenv("WORKEND_SMTP_HOST"),

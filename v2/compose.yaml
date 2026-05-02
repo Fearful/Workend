@@ -61,12 +61,22 @@ services:
       WORKEND_DAGGER_SOCK: "/run/dagger/buildkitd.sock"
       WORKEND_REPOS_ROOT: "/repos"
       WORKEND_LOGS_ROOT: "/var/lib/workend/logs"
-      # GitHub OAuth (optional). If set, also set WORKEND_TOKEN_KEY (32 bytes
-      # base64) for at-rest encryption of stored tokens.
-      WORKEND_GITHUB_CLIENT_ID: "${WORKEND_GITHUB_CLIENT_ID:-}"
+      # OAuth providers (all optional). For any provider configured, also
+      # set WORKEND_TOKEN_KEY (32 bytes base64) for at-rest token encryption.
+      #
+      # Single-instance-per-provider via env vars (simplest path):
+      WORKEND_GITHUB_CLIENT_ID:     "${WORKEND_GITHUB_CLIENT_ID:-}"
       WORKEND_GITHUB_CLIENT_SECRET: "${WORKEND_GITHUB_CLIENT_SECRET:-}"
-      WORKEND_GITHUB_REDIRECT_URL: "${WORKEND_GITHUB_REDIRECT_URL:-http://localhost:3000/auth/github/callback}"
-      WORKEND_TOKEN_KEY: "${WORKEND_TOKEN_KEY:-}"
+      WORKEND_GITLAB_CLIENT_ID:     "${WORKEND_GITLAB_CLIENT_ID:-}"
+      WORKEND_GITLAB_CLIENT_SECRET: "${WORKEND_GITLAB_CLIENT_SECRET:-}"
+      WORKEND_GITLAB_URL:           "${WORKEND_GITLAB_URL:-https://gitlab.com}"
+      WORKEND_GITEA_CLIENT_ID:      "${WORKEND_GITEA_CLIENT_ID:-}"
+      WORKEND_GITEA_CLIENT_SECRET:  "${WORKEND_GITEA_CLIENT_SECRET:-}"
+      WORKEND_GITEA_URL:            "${WORKEND_GITEA_URL:-}"
+      # Multi-instance via JSON file (overrides env vars when set; mount the
+      # file in via the volumes section below):
+      WORKEND_PROVIDERS_FILE:       "${WORKEND_PROVIDERS_FILE:-}"
+      WORKEND_TOKEN_KEY:            "${WORKEND_TOKEN_KEY:-}"
       # Public URL the web frontend is reachable at (used for run links in
       # notifications). Defaults to localhost:3000 for local dev.
       WORKEND_WEB_PUBLIC_URL: "${WORKEND_WEB_PUBLIC_URL:-http://localhost:3000}"

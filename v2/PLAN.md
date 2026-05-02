@@ -451,12 +451,12 @@ A provider is enabled only if its `_CLIENT_ID` and `_CLIENT_SECRET` are set. Wor
 - SSH-key-based clone. HTTPS+token only.
 - Automatic permission discovery (knowing whether the user can write to a given repo).
 
-### Key decisions to lock in here
+### Key decisions (locked in)
 
-1. **One provider per kind, or multiple instances?** Recommend one per kind. Adding multi-instance support means making `provider` no longer a primary key on `user_tokens` and giving each instance an ID — bigger schema churn. Defer.
-2. **Token refresh: lazy (on 401) or proactive (background ticker)?** Recommend lazy. Ticker is more code; lazy works fine for interactive sessions and keeps the system stateless between requests.
-3. **Host-matching for clone auth: exact match or prefix?** Recommend host-equality (`u.Host == provider.InstanceHost()`). Simpler; matches what users expect. Don't try to match `gitlab.com` against `gitlab.com:8080` etc.
-4. **Existing rows on migration:** keep them. Set `instance_url='https://github.com'` for any pre-existing `provider='github'` row in the migration `Up`.
+1. **Multiple instances per provider kind.** `user_tokens` renamed to `provider_connections` with surrogate `id` PK and `UNIQUE (user_id, provider, instance_url)`.
+2. **Lazy token refresh.** Refresh happens at use-time when `expires_at < now()` and a refresh_token is stored, inside `Registry.accessTokenForProvider`. No background ticker.
+3. **Host-equality matching** for clone-URL routing. `OwnsURL` strips ports and lowercases.
+4. **Existing rows preserved** in migration via `ALTER TABLE ... ADD COLUMN instance_url TEXT NOT NULL DEFAULT 'https://github.com'`.
 
 ### Demo
 
