@@ -15,6 +15,7 @@ import (
 	wdagger "workend/api/internal/dagger"
 	"workend/api/internal/dashboard"
 	"workend/api/internal/health"
+	"workend/api/internal/image"
 	"workend/api/internal/oauth"
 	"workend/api/internal/project"
 	"workend/api/internal/run"
@@ -79,6 +80,7 @@ func (s *Server) Router() http.Handler {
 	taskH := &task.Handlers{Pool: s.pool}
 	statsH := &stats.Handlers{Pool: s.pool}
 	dashH := &dashboard.Handlers{Pool: s.pool}
+	imgH := &image.Handlers{Pool: s.pool}
 	runH := s.runH
 	schedH := s.schedH
 
@@ -125,6 +127,8 @@ func (s *Server) Router() http.Handler {
 			r.Post("/projects/{project_id}/schedules", schedH.Create)
 			r.Delete("/schedules/{id}", schedH.Delete)
 			r.Post("/schedules/{id}/toggle", schedH.Toggle)
+
+			r.Get("/projects/{project_id}/images", imgH.ListByProject)
 
 			r.Group(func(r chi.Router) {
 				r.Use(admin.RequireAdmin(s.pool))

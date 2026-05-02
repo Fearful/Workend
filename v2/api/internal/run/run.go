@@ -198,6 +198,39 @@ func (h *Handlers) executeAsync(taskID, runID uuid.UUID, spec Spec) {
 		return
 	}
 
+	// Dockerfile builds take a different code path: produce an image and
+	// record it in the images table.
+	if spec.Source == "dockerfile" {
+		var projectID uuid.UUID
+		_ = h.Pool.QueryRow(ctx, `SELECT project_id FROM runs WHERE id = $1`, runID).Scan(&projectID)
+		var commitSHA *string
+		_ = h.Pool.QueryRow(ctx, `SELECT commit_sha FROM runs WHERE id = $1`, runID).Scan(&commitSHA)
+
+		digest, size, err := ExecuteImageBuild(ctx, h.Dagger, spec)
+		buildFinished := time.Now()
+		if err != nil {
+			h.Logger.Error("image build failed", "run", runID, "err", err)
+			_ = os.WriteFile(spec.LogFile, []byte("workend: image build failed: "+err.Error()), 0o644)
+			h.markFinished(runID, StatusFailed, -1, buildFinished)
+			return
+		}
+		summary := fmt.Sprintf("workend: built image %s (%d bytes)\n", digest, size)
+		_ = os.WriteFile(spec.LogFile, []byte(summary), 0o644)
+
+		commit := ""
+		if commitSHA != nil {
+			commit = *commitSHA
+		}
+		if _, err := h.Pool.Exec(ctx, `
+			INSERT INTO images (project_id, run_id, dockerfile_path, digest, size_bytes, commit_sha)
+			VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))
+		`, projectID, runID, spec.RawCommand, digest, size, commit); err != nil {
+			h.Logger.Warn("image insert failed", "run", runID, "err", err)
+		}
+		h.markFinished(runID, StatusSucceeded, 0, buildFinished)
+		return
+	}
+
 	result, err := Execute(ctx, h.Dagger, spec)
 	finished := time.Now()
 	if err != nil {

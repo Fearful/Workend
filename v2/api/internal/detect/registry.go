@@ -15,6 +15,7 @@ func AllDetectors() []Detector {
 	return []Detector{
 		NPM{},
 		Just{},
+		Dockerfile{},
 	}
 }
 
