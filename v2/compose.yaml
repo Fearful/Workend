@@ -1,0 +1,10 @@
+# Workend v2 — Docker Compose
+#
+# Filled in during Stage 1. This is a placeholder so the file path is reserved
+# and tooling that searches for compose.yaml finds the canonical location.
+#
+# See v2/PLAN.md Stage 1 for what goes here:
+#   - web (SvelteKit)
+#   - api (Go)
+#   - db (Postgres 16)
+#   - dagger-engine
