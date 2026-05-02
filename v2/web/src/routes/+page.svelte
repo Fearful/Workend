@@ -1,101 +1,89 @@
 <script lang="ts">
   let { data } = $props();
-
-  function statusColor(value: string | undefined): string {
-    if (!value) return '#6b7280';
-    if (value === 'ok') return '#22c55e';
-    return '#ef4444';
-  }
 </script>
 
 <style>
-  .lede {
-    color: #9ca3af;
-    margin-bottom: 2rem;
-    line-height: 1.5;
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
   }
 
-  .panel {
+  h1 {
+    font-size: 1.5rem;
+    margin: 0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+
+  .card {
     background: #14181d;
     border: 1px solid #1f2429;
     border-radius: 8px;
-    padding: 1.25rem 1.5rem;
+    padding: 1.25rem;
   }
 
-  .panel h2 {
-    margin: 0 0 1rem 0;
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+  .card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+  }
+
+  .card p {
     color: #9ca3af;
-    font-weight: 600;
-  }
-
-  .check {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid #1f2429;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: 0.875rem;
+    margin: 0 0 0.75rem 0;
+    min-height: 1.25rem;
   }
 
-  .check:last-child {
-    border-bottom: none;
-  }
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  }
-
-  .check-name {
-    flex: 1;
-    color: #e8eaed;
-  }
-
-  .check-detail {
+  .card .meta {
     color: #6b7280;
     font-size: 0.75rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #9ca3af;
   }
 
   .error {
     color: #ef4444;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: 0.875rem;
-    margin-top: 0.5rem;
+    background: #2a1414;
+    border: 1px solid #5b1a1a;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
   }
 </style>
 
-<p class="lede">
-  Walking skeleton. Four services should be reachable: web (you're here), api,
-  postgres, and the Dagger engine.
-</p>
+<div class="header-row">
+  <h1>Workspaces</h1>
+  <a href="/workspaces/new"><button>New workspace</button></a>
+</div>
 
-<section class="panel">
-  <h2>System Status</h2>
+{#if data.error}
+  <div class="error">{data.error}</div>
+{/if}
 
-  {#if !data.apiReachable}
-    <div class="check">
-      <span class="dot" style="background: {statusColor('error')}"></span>
-      <span class="check-name">api</span>
-      <span class="check-detail">unreachable</span>
-    </div>
-    <p class="error">{data.error}</p>
-  {:else if data.health}
-    <div class="check">
-      <span class="dot" style="background: {statusColor(data.health.status)}"></span>
-      <span class="check-name">overall</span>
-      <span class="check-detail">{data.health.status}</span>
-    </div>
-    {#each Object.entries(data.health.checks) as [name, value]}
-      <div class="check">
-        <span class="dot" style="background: {statusColor(value as string)}"></span>
-        <span class="check-name">{name}</span>
-        <span class="check-detail">{value}</span>
+{#if data.workspaces.length === 0}
+  <div class="empty">
+    <p>No workspaces yet. Create your first one.</p>
+  </div>
+{:else}
+  <div class="grid">
+    {#each data.workspaces as ws (ws.id)}
+      <div class="card">
+        <h3>{ws.name}</h3>
+        <p>{ws.description || '—'}</p>
+        <div class="meta">created {new Date(ws.created_at).toLocaleDateString()}</div>
       </div>
     {/each}
-  {/if}
-</section>
+  </div>
+{/if}

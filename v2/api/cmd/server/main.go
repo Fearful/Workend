@@ -26,6 +26,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	logger.Info("running migrations")
+	if err := db.Migrate(cfg.DatabaseURL); err != nil {
+		logger.Error("migrations failed", "err", err)
+		os.Exit(1)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 

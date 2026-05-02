@@ -8,8 +8,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"workend/api/internal/auth"
 	"workend/api/internal/config"
 	"workend/api/internal/health"
+	"workend/api/internal/workspace"
 )
 
 type Server struct {
@@ -28,25 +30,29 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	r.Use(corsHeaders)
 
 	r.Handle("/healthz", &health.Handler{
 		Pool:           s.pool,
 		DaggerSockPath: s.cfg.DaggerSockPath,
 	})
 
-	return r
-}
+	authH := &auth.Handlers{Pool: s.pool, Secure: s.cfg.CookieSecure}
+	wsH := &workspace.Handlers{Pool: s.pool}
 
-func corsHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
+	r.Route("/api", func(r chi.Router) {
+		r.Post("/auth/signup", authH.Signup)
+		r.Post("/auth/login", authH.Login)
+		r.Post("/auth/logout", authH.Logout)
+
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireUser(s.pool))
+			r.Get("/me", authH.Me)
+			r.Get("/workspaces", wsH.List)
+			r.Post("/workspaces", wsH.Create)
+			r.Get("/workspaces/{id}", wsH.Get)
+			r.Delete("/workspaces/{id}", wsH.Delete)
+		})
 	})
+
+	return r
 }

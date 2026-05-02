@@ -1,11 +1,17 @@
 // See https://kit.svelte.dev/docs/types#app
 declare global {
   namespace App {
-    // interface Error {}
-    // interface Locals {}
-    // interface PageData {}
-    // interface PageState {}
-    // interface Platform {}
+    interface Locals {
+      user: {
+        id: string;
+        email: string;
+        display_name: string;
+        is_admin: boolean;
+      } | null;
+    }
+    interface PageData {
+      user: App.Locals['user'];
+    }
   }
 }
 

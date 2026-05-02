@@ -1,17 +1,27 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { apiFetch } from '$lib/api';
 
-const API_URL = process.env.WORKEND_API_URL || 'http://api:8080';
+const SESSION_COOKIE = 'workend_session';
 
-export const load: PageServerLoad = async ({ fetch }) => {
-  try {
-    const res = await fetch(`${API_URL}/healthz`);
-    const health = await res.json();
-    return { health, apiReachable: true, error: null };
-  } catch (err) {
-    return {
-      health: null,
-      apiReachable: false,
-      error: err instanceof Error ? err.message : String(err)
-    };
-  }
+interface Workspace {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const load: PageServerLoad = async ({ locals, cookies }) => {
+  if (!locals.user) throw redirect(303, '/login');
+
+  const token = cookies.get(SESSION_COOKIE);
+  const result = await apiFetch<Workspace[]>('/api/workspaces', {
+    cookie: token ? `${SESSION_COOKIE}=${token}` : undefined
+  });
+
+  return {
+    workspaces: result.ok ? (result.data ?? []) : [],
+    error: result.ok ? null : (result.error || 'failed to load workspaces')
+  };
 };
