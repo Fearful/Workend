@@ -19,6 +19,7 @@ import (
 	"workend/api/internal/notify"
 	"workend/api/internal/oauth"
 	"workend/api/internal/project"
+	"workend/api/internal/quota"
 	"workend/api/internal/run"
 	"workend/api/internal/schedule"
 	"workend/api/internal/stats"
@@ -95,6 +96,7 @@ func (s *Server) Router() http.Handler {
 	dashH := &dashboard.Handlers{Pool: s.pool}
 	imgH := &image.Handlers{Pool: s.pool}
 	notifH := &notify.Handlers{D: s.notif}
+	quotaH := &quota.Handlers{Pool: s.pool, ReposRoot: s.cfg.ReposRoot}
 	runH := s.runH
 	schedH := s.schedH
 
@@ -135,12 +137,14 @@ func (s *Server) Router() http.Handler {
 			r.Get("/projects/{id}", projH.Get)
 			r.Delete("/projects/{id}", projH.Delete)
 			r.Post("/projects/{id}/sync", projH.Sync)
+			r.Post("/projects/{id}/webhook-secret", projH.SetWebhookSecret)
 			r.Get("/projects/{id}/stats", statsH.GetLatest)
 
 			r.Get("/projects/{project_id}/tasks", taskH.ListByProject)
 			r.Get("/projects/{project_id}/runs", runH.ListByProject)
 			r.Get("/me/runs", runH.ListForUser)
 			r.Get("/me/dashboard", dashH.Get)
+			r.Get("/me/usage", quotaH.Get)
 
 			r.Post("/tasks/{id}/runs", runH.Create)
 			r.Get("/runs/{id}", runH.Get)

@@ -4,9 +4,13 @@ package project
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -23,6 +27,7 @@ import (
 	wdagger "workend/api/internal/dagger"
 	"workend/api/internal/detect"
 	"workend/api/internal/oauth"
+	"workend/api/internal/quota"
 	"workend/api/internal/repo"
 	"workend/api/internal/stats"
 )
@@ -48,9 +53,11 @@ type Project struct {
 	LastSyncedAt      *time.Time `json:"last_synced_at"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
-	// Stage 19: only populated by Get (single-project), not List, to avoid
-	// surfacing tokens in bulk responses.
-	WebhookToken string `json:"webhook_token,omitempty"`
+	// Stage 19/24: only populated by Get (single-project), not List, to avoid
+	// surfacing webhook secrets/tokens in bulk responses.
+	WebhookToken     string  `json:"webhook_token,omitempty"`
+	WebhookSecretSet bool    `json:"webhook_secret_set"`
+	WebhookSecret    *string `json:"webhook_secret,omitempty"` // only on the immediate response of SetWebhookSecret
 }
 
 type Handlers struct {
@@ -264,26 +271,68 @@ func (h *Handlers) userOwnsWorkspace(ctx context.Context, uid, wsID uuid.UUID) b
 
 func (h *Handlers) fetchOwned(ctx context.Context, uid, pid uuid.UUID) (*Project, error) {
 	var p Project
+	var secret *string
 	err := h.Pool.QueryRow(ctx, `
 		SELECT p.id, p.workspace_id, p.name, p.git_url, p.default_branch, p.local_path,
 		       p.status, p.last_commit_sha, p.last_commit_message, p.last_commit_author,
-		       p.last_synced_at, p.created_at, p.updated_at, p.webhook_token
+		       p.last_synced_at, p.created_at, p.updated_at, p.webhook_token, p.webhook_secret
 		FROM projects p
 		JOIN workspaces w ON w.id = p.workspace_id
 		JOIN workspace_members m ON m.workspace_id = w.id
 		WHERE p.id = $1 AND m.user_id = $2
 	`, pid, uid).Scan(&p.ID, &p.WorkspaceID, &p.Name, &p.GitURL, &p.DefaultBranch, &p.LocalPath,
 		&p.Status, &p.LastCommitSHA, &p.LastCommitMessage, &p.LastCommitAuthor,
-		&p.LastSyncedAt, &p.CreatedAt, &p.UpdatedAt, &p.WebhookToken)
+		&p.LastSyncedAt, &p.CreatedAt, &p.UpdatedAt, &p.WebhookToken, &secret)
 	if err != nil {
 		return nil, err
 	}
+	p.WebhookSecretSet = secret != nil && *secret != ""
 	return &p, nil
 }
 
+// SetWebhookSecret regenerates (or clears, with ?clear=true) the project's
+// webhook signing secret. Returns the new plain-text secret in the
+// response body (it's only shown this one time). Members can call.
+//
+// POST /api/projects/:id/webhook-secret
+func (h *Handlers) SetWebhookSecret(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	pid, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if _, err := h.fetchOwned(r.Context(), uid, pid); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if r.URL.Query().Get("clear") == "true" {
+		if _, err := h.Pool.Exec(r.Context(),
+			`UPDATE projects SET webhook_secret = NULL WHERE id = $1`, pid); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	var newSecret string
+	if err := h.Pool.QueryRow(r.Context(), `
+		UPDATE projects
+		SET webhook_secret = encode(gen_random_bytes(24), 'base64')
+		WHERE id = $1
+		RETURNING webhook_secret
+	`, pid).Scan(&newSecret); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"webhook_secret": newSecret})
+}
+
 // Webhook handles a public push event from a git provider. Authn is the
-// per-project token in the URL path. Body content is ignored — we just
-// trigger a sync (= clone the latest of the project's default branch).
+// per-project token in the URL path; if the project also has a webhook_secret
+// set, the request must additionally carry a valid HMAC signature in one of
+// the per-provider headers (see verifySignature).
 //
 // POST /api/webhooks/projects/{token}
 func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
@@ -298,13 +347,14 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 		creatorID              uuid.UUID
 		gitURL                 string
 		defaultBranch          *string
+		secret                 *string
 	)
 	err := h.Pool.QueryRow(r.Context(), `
-		SELECT p.id, p.workspace_id, w.user_id, p.git_url, p.default_branch
+		SELECT p.id, p.workspace_id, w.user_id, p.git_url, p.default_branch, p.webhook_secret
 		FROM projects p
 		JOIN workspaces w ON w.id = p.workspace_id
 		WHERE p.webhook_token = $1
-	`, token).Scan(&projectID, &workspaceID, &creatorID, &gitURL, &defaultBranch)
+	`, token).Scan(&projectID, &workspaceID, &creatorID, &gitURL, &defaultBranch, &secret)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -312,6 +362,18 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+
+	if secret != nil && *secret != "" {
+		body, err := io.ReadAll(io.LimitReader(r.Body, 5<<20)) // 5 MB cap
+		if err != nil {
+			http.Error(w, "read body", http.StatusBadRequest)
+			return
+		}
+		if !verifySignature(r.Header, body, *secret) {
+			http.Error(w, "invalid signature", http.StatusUnauthorized)
+			return
+		}
 	}
 
 	if _, err := h.Pool.Exec(r.Context(),
@@ -332,9 +394,42 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// verifySignature accepts a request as authentic if any of the supported
+// per-provider headers validates against the shared secret. Constant-time
+// comparison throughout.
+//
+//	GitHub:  X-Hub-Signature-256: sha256=<hex of HMAC-SHA256(secret, body)>
+//	Gitea:   X-Gitea-Signature:   <hex of HMAC-SHA256(secret, body)>
+//	GitLab:  X-Gitlab-Token:      <secret> (plain shared token, no HMAC)
+func verifySignature(headers http.Header, body []byte, secret string) bool {
+	if got := headers.Get("X-Hub-Signature-256"); got != "" {
+		want := "sha256=" + hmacHex(body, secret)
+		return hmac.Equal([]byte(got), []byte(want))
+	}
+	if got := headers.Get("X-Gitea-Signature"); got != "" {
+		want := hmacHex(body, secret)
+		return hmac.Equal([]byte(got), []byte(want))
+	}
+	if got := headers.Get("X-Gitlab-Token"); got != "" {
+		return hmac.Equal([]byte(got), []byte(secret))
+	}
+	return false
+}
+
+func hmacHex(body []byte, secret string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 func (h *Handlers) cloneAsync(userID, projectID, workspaceID uuid.UUID, gitURL, branch string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+
+	if err := quota.CheckOrErr(ctx, h.Pool, h.ReposRoot, workspaceID); err != nil {
+		h.markError(projectID, err)
+		return
+	}
 
 	dest := filepath.Join(h.ReposRoot, workspaceID.String(), projectID.String())
 
