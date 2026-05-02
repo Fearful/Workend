@@ -22,6 +22,17 @@
     return sha ? sha.slice(0, 12) : '—';
   }
 
+  function sourceIcon(src: string): string {
+    switch (src) {
+      case 'npm':
+        return 'npm';
+      case 'just':
+        return 'just';
+      default:
+        return src;
+    }
+  }
+
   // Auto-refresh while clone is in progress
   let pollHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -43,6 +54,15 @@
   onDestroy(() => {
     if (pollHandle) clearInterval(pollHandle);
   });
+
+  let tasksBySource = $derived.by(() => {
+    const groups: Record<string, typeof data.tasks> = {};
+    for (const t of data.tasks) {
+      if (!groups[t.source]) groups[t.source] = [];
+      groups[t.source].push(t);
+    }
+    return groups;
+  });
 </script>
 
 <style>
@@ -52,6 +72,15 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+  }
+
+  h2 {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #9ca3af;
+    font-weight: 600;
+    margin: 2rem 0 1rem 0;
   }
 
   .dot {
@@ -90,12 +119,7 @@
   }
 
   .panel h2 {
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #9ca3af;
-    font-weight: 600;
-    margin: 0 0 1rem 0;
+    margin-top: 0;
   }
 
   .row {
@@ -123,6 +147,54 @@
 
   .commit-msg {
     font-family: inherit;
+  }
+
+  .task-group {
+    margin-bottom: 1rem;
+  }
+
+  .task-source-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: #60a5fa;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+    padding: 0.125rem 0.5rem;
+    background: rgba(96, 165, 250, 0.1);
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .task-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid #1f2429;
+  }
+
+  .task-row:last-child {
+    border-bottom: none;
+  }
+
+  .task-name {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.875rem;
+  }
+
+  .task-cmd {
+    color: #6b7280;
+    font-size: 0.75rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .empty {
+    color: #6b7280;
+    font-size: 0.875rem;
+    text-align: center;
+    padding: 1.5rem;
   }
 </style>
 
@@ -187,4 +259,30 @@
     <span class="label">Synced</span>
     <span class="value">{data.project.last_synced_at ? new Date(data.project.last_synced_at).toLocaleString() : '—'}</span>
   </div>
+</section>
+
+<section class="panel">
+  <h2>Tasks</h2>
+  {#if data.tasks.length === 0}
+    <div class="empty">
+      {#if data.project.status === 'ready'}
+        No runnable tasks detected. Add a <code>package.json</code> with a <code>scripts</code> section, or a <code>justfile</code>.
+      {:else}
+        Tasks will appear after the repo finishes cloning.
+      {/if}
+    </div>
+  {:else}
+    {#each Object.entries(tasksBySource) as [source, tasks] (source)}
+      <div class="task-group">
+        <div class="task-source-label">{sourceIcon(source)}</div>
+        {#each tasks as t (t.id)}
+          <div class="task-row">
+            <span class="task-name">{t.name}</span>
+            <span class="task-cmd">{t.raw_command}</span>
+            <button type="button" disabled title="Wired up in Stage 5">Run</button>
+          </div>
+        {/each}
+      </div>
+    {/each}
+  {/if}
 </section>

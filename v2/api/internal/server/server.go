@@ -13,6 +13,7 @@ import (
 	wdagger "workend/api/internal/dagger"
 	"workend/api/internal/health"
 	"workend/api/internal/project"
+	"workend/api/internal/task"
 	"workend/api/internal/workspace"
 )
 
@@ -47,6 +48,7 @@ func (s *Server) Router() http.Handler {
 		ReposRoot: s.cfg.ReposRoot,
 		Logger:    s.logger,
 	}
+	taskH := &task.Handlers{Pool: s.pool}
 
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/auth/signup", authH.Signup)
@@ -67,6 +69,8 @@ func (s *Server) Router() http.Handler {
 			r.Get("/projects/{id}", projH.Get)
 			r.Delete("/projects/{id}", projH.Delete)
 			r.Post("/projects/{id}/sync", projH.Sync)
+
+			r.Get("/projects/{project_id}/tasks", taskH.ListByProject)
 		})
 	})
 

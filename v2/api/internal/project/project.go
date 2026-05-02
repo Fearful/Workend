@@ -21,6 +21,7 @@ import (
 
 	"workend/api/internal/auth"
 	wdagger "workend/api/internal/dagger"
+	"workend/api/internal/detect"
 	"workend/api/internal/repo"
 )
 
@@ -320,6 +321,10 @@ func (h *Handlers) cloneAsync(projectID, workspaceID uuid.UUID, gitURL, branch s
 	}
 
 	h.Logger.Info("clone complete", "project", projectID, "commit", result.LatestCommitSHA)
+
+	if err := detect.Run(ctx, h.Pool, h.Logger, projectID, result.LocalPath); err != nil {
+		h.Logger.Warn("task detection failed", "project", projectID, "err", err)
+	}
 }
 
 func (h *Handlers) markError(projectID uuid.UUID, err error) {

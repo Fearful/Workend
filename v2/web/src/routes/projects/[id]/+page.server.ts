@@ -25,6 +25,15 @@ interface Workspace {
   name: string;
 }
 
+interface Task {
+  id: string;
+  project_id: string;
+  source: string;
+  name: string;
+  raw_command: string;
+  detected_at: string;
+}
+
 export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   if (!locals.user) throw redirect(303, '/login');
   const cookie = cookies.get(SESSION_COOKIE);
@@ -34,13 +43,15 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   if (projResult.status === 404) throw error(404, 'project not found');
   if (!projResult.ok || !projResult.data) throw error(500, projResult.error || 'failed to load');
 
-  const wsResult = await apiFetch<Workspace>(`/api/workspaces/${projResult.data.workspace_id}`, {
-    cookie: cookieHeader
-  });
+  const [wsResult, tasksResult] = await Promise.all([
+    apiFetch<Workspace>(`/api/workspaces/${projResult.data.workspace_id}`, { cookie: cookieHeader }),
+    apiFetch<Task[]>(`/api/projects/${params.id}/tasks`, { cookie: cookieHeader })
+  ]);
 
   return {
     project: projResult.data,
-    workspace: wsResult.ok ? (wsResult.data ?? null) : null
+    workspace: wsResult.ok ? (wsResult.data ?? null) : null,
+    tasks: tasksResult.ok ? (tasksResult.data ?? []) : []
   };
 };
 
