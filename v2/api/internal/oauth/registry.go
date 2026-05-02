@@ -201,7 +201,9 @@ func (r *Registry) AccessTokenForCloneURL(ctx context.Context, userID uuid.UUID,
 }
 
 // ListReposForUser returns a page of repos for a (user, provider) connection.
-// Lazy-refreshes the access token if it's expired.
+// Lazy-refreshes the access token if expired (Stage 15) AND retries once on
+// a 401-shaped error from the upstream API (Stage 27) — handles the case
+// where a token gets revoked or invalidated mid-validity-window.
 func (r *Registry) ListReposForUser(ctx context.Context, userID uuid.UUID, providerID string, page, perPage int) ([]Repo, error) {
 	p, ok := r.ByID(providerID)
 	if !ok {
@@ -214,7 +216,56 @@ func (r *Registry) ListReposForUser(ctx context.Context, userID uuid.UUID, provi
 	if access == "" {
 		return nil, ErrConnectionNotFound
 	}
-	return p.ListRepos(ctx, access, page, perPage)
+	repos, err := p.ListRepos(ctx, access, page, perPage)
+	if err != nil && isUnauthorized(err) {
+		newAccess, refreshErr := r.ForceRefresh(ctx, userID, p)
+		if refreshErr == nil && newAccess != "" {
+			return p.ListRepos(ctx, newAccess, page, perPage)
+		}
+	}
+	return repos, err
+}
+
+// ForceRefresh ignores expires_at and immediately exchanges the stored
+// refresh token for a new access token, persisting the result. Used by
+// callers (Stage 27) that observed a 401 from the upstream API even when
+// the local copy of expires_at said the token was still valid.
+func (r *Registry) ForceRefresh(ctx context.Context, userID uuid.UUID, p Provider) (string, error) {
+	var encRefresh []byte
+	err := r.pool.QueryRow(ctx, `
+		SELECT refresh_token
+		FROM provider_connections
+		WHERE user_id = $1 AND provider = $2 AND instance_url = $3
+	`, userID, p.Kind(), p.InstanceURL()).Scan(&encRefresh)
+	if err != nil {
+		return "", err
+	}
+	if len(encRefresh) == 0 {
+		return "", ErrRefreshUnsupported
+	}
+	plain, err := r.box.Open(encRefresh)
+	if err != nil {
+		return "", err
+	}
+	newTok, err := p.RefreshAccess(ctx, string(plain))
+	if err != nil {
+		return "", err
+	}
+	if err := r.refreshSave(ctx, userID, p, newTok); err != nil {
+		return "", err
+	}
+	return newTok.Access, nil
+}
+
+// isUnauthorized inspects an error message for 401-shaped substrings.
+// The provider error strings are stable across SDK versions because they're
+// constructed from the upstream HTTP status in our own code.
+func isUnauthorized(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "status 401") || strings.Contains(msg, "Unauthorized")
 }
 
 // accessTokenForProvider is the workhorse: load encrypted token from DB,
