@@ -29,26 +29,23 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   if (runResult.status === 404) throw error(404, 'run not found');
   if (!runResult.ok || !runResult.data) throw error(500, runResult.error || 'failed to load');
 
-  // Fetch the log only when the run is in a terminal state. While running,
-  // we'll fetch on each poll cycle. (Stage 6 swaps this to SSE.)
+  // For terminal runs, fetch the full log up-front. For active runs, the
+  // browser will subscribe to the SSE stream.
   let log = '';
-  const logResult = await apiFetch<unknown>(`/api/runs/${params.id}/log`, { cookie: cookieHeader });
-  if (logResult.ok && typeof logResult.data === 'string') {
-    log = logResult.data;
-  } else if (logResult.ok && logResult.status === 200) {
-    // apiFetch returns data as parsed JSON; for plain text we need a raw fetch.
-    log = '';
-  }
-
-  // Plain text fetch since apiFetch parses JSON
-  try {
-    const apiURL = process.env.WORKEND_API_URL || 'http://api:8080';
-    const r = await fetch(`${apiURL}/api/runs/${params.id}/log`, {
-      headers: cookieHeader ? { Cookie: cookieHeader } : {}
-    });
-    if (r.ok) log = await r.text();
-  } catch {
-    // ignore
+  const isTerminal =
+    runResult.data.status === 'succeeded' ||
+    runResult.data.status === 'failed' ||
+    runResult.data.status === 'cancelled';
+  if (isTerminal) {
+    try {
+      const apiURL = process.env.WORKEND_API_URL || 'http://api:8080';
+      const r = await fetch(`${apiURL}/api/runs/${params.id}/log`, {
+        headers: cookieHeader ? { Cookie: cookieHeader } : {}
+      });
+      if (r.ok) log = await r.text();
+    } catch {
+      // ignore
+    }
   }
 
   return { run: runResult.data, log };

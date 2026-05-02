@@ -84,6 +84,8 @@ func (s *Server) Router() http.Handler {
 			r.Post("/tasks/{id}/runs", runH.Create)
 			r.Get("/runs/{id}", runH.Get)
 			r.Get("/runs/{id}/log", runH.GetLog)
+			r.Get("/runs/{id}/log/stream", runH.Stream)
+			r.Post("/runs/{id}/cancel", runH.Cancel)
 		})
 	})
 

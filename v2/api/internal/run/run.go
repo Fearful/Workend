@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -52,13 +54,14 @@ type Handlers struct {
 	LogsRoot string
 	Logger   *slog.Logger
 
-	// Per-task lock: only one run per task at a time.
-	mu      sync.Mutex
-	running map[uuid.UUID]uuid.UUID // task_id -> run_id
+	mu         sync.Mutex
+	running    map[uuid.UUID]uuid.UUID            // task_id -> run_id
+	cancellers map[uuid.UUID]context.CancelFunc   // run_id -> cancel func
 }
 
 func (h *Handlers) Init() {
 	h.running = map[uuid.UUID]uuid.UUID{}
+	h.cancellers = map[uuid.UUID]context.CancelFunc{}
 }
 
 // Create starts a new run for the given task.
@@ -148,11 +151,16 @@ func (h *Handlers) executeAsync(taskID, runID uuid.UUID, spec Spec) {
 	defer func() {
 		h.mu.Lock()
 		delete(h.running, taskID)
+		delete(h.cancellers, runID)
 		h.mu.Unlock()
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+
+	h.mu.Lock()
+	h.cancellers[runID] = cancel
+	h.mu.Unlock()
 
 	now := time.Now()
 	if _, err := h.Pool.Exec(ctx, `
@@ -170,8 +178,13 @@ func (h *Handlers) executeAsync(taskID, runID uuid.UUID, spec Spec) {
 	result, err := Execute(ctx, h.Dagger, spec)
 	finished := time.Now()
 	if err != nil {
+		// Distinguish between user-initiated cancel and infrastructure failure.
+		if errors.Is(ctx.Err(), context.Canceled) {
+			_ = os.WriteFile(spec.LogFile, []byte("workend: run cancelled\n"), 0o644)
+			h.markFinished(runID, StatusCancelled, -1, finished)
+			return
+		}
 		h.Logger.Error("run execute failed", "run", runID, "err", err)
-		// Persist the error message to the log file for the UI to surface.
 		_ = os.WriteFile(spec.LogFile, []byte("workend: run failed: "+err.Error()), 0o644)
 		h.markFinished(runID, StatusFailed, -1, finished)
 		return
@@ -201,8 +214,178 @@ func (h *Handlers) markFailed(runID uuid.UUID, exitCode int, msg string) {
 	h.markFinished(runID, StatusFailed, exitCode, time.Now())
 }
 
-// Get returns one run with its log content (Stage 5: full log inline; Stage 6
-// will move to streaming and this stays as the terminal-state fallback).
+// Cancel signals the executing goroutine to abort.
+// POST /api/runs/:id/cancel
+func (h *Handlers) Cancel(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	runID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid run id", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.fetchOwned(r.Context(), uid, runID); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	h.mu.Lock()
+	cancelFn, found := h.cancellers[runID]
+	h.mu.Unlock()
+
+	if !found {
+		http.Error(w, "run not active", http.StatusConflict)
+		return
+	}
+
+	cancelFn()
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// Stream emits the run's log as Server-Sent Events. While the run is active,
+// the handler tail-follows the log file (1s polling) and emits new bytes as
+// `log` events, then a final `done` event with status + exit code when the
+// run reaches a terminal state.
+//
+// IMPORTANT (Stage 6 limitation): the underlying Dagger SDK's container.Stdout()
+// only returns once the container exits, so today the log file is written
+// once at the end of the run rather than incrementally. The SSE plumbing is
+// correct — clients see the same "tail-follow → done" sequence — but expect
+// a single large delivery at completion until the runner is reworked to
+// produce incremental output (planned post-MVP).
+//
+// GET /api/runs/:id/log/stream
+func (h *Handlers) Stream(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	runID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid run id", http.StatusBadRequest)
+		return
+	}
+
+	run, err := h.fetchOwned(r.Context(), uid, runID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	logPath := run.LogPath
+	var offset int64
+
+	// Send any existing content
+	if size, ok := readAndSend(w, logPath, 0); ok {
+		offset = size
+		flusher.Flush()
+	}
+
+	if isTerminal(run.Status) {
+		sendDone(w, run.Status, run.ExitCode)
+		flusher.Flush()
+		return
+	}
+
+	tick := time.NewTicker(1 * time.Second)
+	defer tick.Stop()
+	keepAlive := time.NewTicker(15 * time.Second)
+	defer keepAlive.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-keepAlive.C:
+			fmt.Fprint(w, ": keepalive\n\n")
+			flusher.Flush()
+		case <-tick.C:
+			if size, ok := readAndSend(w, logPath, offset); ok {
+				offset = size
+				flusher.Flush()
+			}
+			current, err := h.fetchOwned(r.Context(), uid, runID)
+			if err != nil {
+				return
+			}
+			if isTerminal(current.Status) {
+				// Final flush before done event in case more bytes arrived
+				if size, ok := readAndSend(w, logPath, offset); ok {
+					offset = size
+				}
+				sendDone(w, current.Status, current.ExitCode)
+				flusher.Flush()
+				return
+			}
+		}
+	}
+}
+
+func readAndSend(w io.Writer, path string, fromOffset int64) (newSize int64, sent bool) {
+	info, err := os.Stat(path)
+	if err != nil || info.Size() <= fromOffset {
+		return fromOffset, false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return fromOffset, false
+	}
+	defer f.Close()
+	if _, err := f.Seek(fromOffset, io.SeekStart); err != nil {
+		return fromOffset, false
+	}
+	buf := make([]byte, info.Size()-fromOffset)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return fromOffset, false
+	}
+	if n == 0 {
+		return fromOffset, false
+	}
+	sendEvent(w, "log", string(buf[:n]))
+	return fromOffset + int64(n), true
+}
+
+func sendEvent(w io.Writer, event, data string) {
+	// Each SSE message: "event: <name>\ndata: <line>\n... \n\n"
+	// Multi-line data must be split into multiple data: lines.
+	fmt.Fprintf(w, "event: %s\n", event)
+	for i := 0; i < len(data); {
+		j := i
+		for j < len(data) && data[j] != '\n' {
+			j++
+		}
+		fmt.Fprintf(w, "data: %s\n", data[i:j])
+		i = j + 1
+	}
+	fmt.Fprint(w, "\n")
+}
+
+func sendDone(w io.Writer, status string, exitCode *int) {
+	code := -1
+	if exitCode != nil {
+		code = *exitCode
+	}
+	payload, _ := json.Marshal(map[string]any{"status": status, "exit_code": code})
+	sendEvent(w, "done", string(payload))
+}
+
+func isTerminal(status string) bool {
+	return status == StatusSucceeded || status == StatusFailed || status == StatusCancelled
+}
+
+// Get returns one run with its log content (terminal state) or just metadata
+// (live state).
 // GET /api/runs/:id
 func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 	uid := auth.UserID(r.Context())
@@ -226,7 +409,8 @@ func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(run)
 }
 
-// GetLog returns the run's log file as plain text. Caller streams it in S6.
+// GetLog returns the run's log file as plain text. Used by the SSE proxy
+// fallback and as the post-completion view.
 // GET /api/runs/:id/log
 func (h *Handlers) GetLog(w http.ResponseWriter, r *http.Request) {
 	uid := auth.UserID(r.Context())
