@@ -2,17 +2,23 @@
   import { invalidateAll } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
 
-  let { data } = $props();
+  let { data, form } = $props();
 
   function statusColor(status: string): string {
     switch (status) {
       case 'ready':
+      case 'succeeded':
         return '#22c55e';
       case 'cloning':
       case 'pending':
+      case 'queued':
+      case 'running':
         return '#eab308';
       case 'error':
+      case 'failed':
         return '#ef4444';
+      case 'cancelled':
+        return '#6b7280';
       default:
         return '#6b7280';
     }
@@ -22,22 +28,20 @@
     return sha ? sha.slice(0, 12) : '—';
   }
 
-  function sourceIcon(src: string): string {
-    switch (src) {
-      case 'npm':
-        return 'npm';
-      case 'just':
-        return 'just';
-      default:
-        return src;
-    }
+  function formatDuration(start: string | null, end: string | null): string {
+    if (!start) return '—';
+    const startMs = new Date(start).getTime();
+    const endMs = end ? new Date(end).getTime() : Date.now();
+    const sec = Math.round((endMs - startMs) / 1000);
+    if (sec < 60) return `${sec}s`;
+    return `${Math.floor(sec / 60)}m ${sec % 60}s`;
   }
 
-  // Auto-refresh while clone is in progress
   let pollHandle: ReturnType<typeof setInterval> | null = null;
 
   function maybeStartPolling() {
-    const transient = data.project.status === 'cloning' || data.project.status === 'pending';
+    const transient = data.project.status === 'cloning' || data.project.status === 'pending' ||
+      data.runs.some((r) => r.status === 'queued' || r.status === 'running');
     if (transient && !pollHandle) {
       pollHandle = setInterval(() => invalidateAll(), 2000);
     } else if (!transient && pollHandle) {
@@ -196,6 +200,47 @@
     text-align: center;
     padding: 1.5rem;
   }
+
+  .run-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #1f2429;
+    text-decoration: none;
+    color: inherit;
+    font-size: 0.875rem;
+  }
+
+  .run-row:hover {
+    background: #1a1f25;
+    text-decoration: none;
+  }
+
+  .run-row:last-child {
+    border-bottom: none;
+  }
+
+  .run-name {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .run-meta {
+    color: #6b7280;
+    font-size: 0.75rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .error-banner {
+    color: #ef4444;
+    font-size: 0.875rem;
+    background: #2a1414;
+    border: 1px solid #5b1a1a;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+  }
 </style>
 
 <div class="breadcrumb">
@@ -221,44 +266,24 @@
   </div>
 </div>
 
+{#if form?.error}
+  <div class="error-banner">{form.error}</div>
+{/if}
+
 <section class="panel">
   <h2>Repository</h2>
-  <div class="row">
-    <span class="label">Git URL</span>
-    <span class="value">{data.project.git_url}</span>
-  </div>
-  <div class="row">
-    <span class="label">Branch</span>
-    <span class="value">{data.project.default_branch || '—'}</span>
-  </div>
-  <div class="row">
-    <span class="label">Status</span>
-    <span class="value">{data.project.status}</span>
-  </div>
-  <div class="row">
-    <span class="label">Local path</span>
-    <span class="value">{data.project.local_path || '—'}</span>
-  </div>
+  <div class="row"><span class="label">Git URL</span><span class="value">{data.project.git_url}</span></div>
+  <div class="row"><span class="label">Branch</span><span class="value">{data.project.default_branch || '—'}</span></div>
+  <div class="row"><span class="label">Status</span><span class="value">{data.project.status}</span></div>
+  <div class="row"><span class="label">Local path</span><span class="value">{data.project.local_path || '—'}</span></div>
 </section>
 
 <section class="panel">
   <h2>Latest commit</h2>
-  <div class="row">
-    <span class="label">SHA</span>
-    <span class="value">{shortSha(data.project.last_commit_sha)}</span>
-  </div>
-  <div class="row">
-    <span class="label">Author</span>
-    <span class="value commit-msg">{data.project.last_commit_author || '—'}</span>
-  </div>
-  <div class="row">
-    <span class="label">Message</span>
-    <span class="value commit-msg">{data.project.last_commit_message || '—'}</span>
-  </div>
-  <div class="row">
-    <span class="label">Synced</span>
-    <span class="value">{data.project.last_synced_at ? new Date(data.project.last_synced_at).toLocaleString() : '—'}</span>
-  </div>
+  <div class="row"><span class="label">SHA</span><span class="value">{shortSha(data.project.last_commit_sha)}</span></div>
+  <div class="row"><span class="label">Author</span><span class="value commit-msg">{data.project.last_commit_author || '—'}</span></div>
+  <div class="row"><span class="label">Message</span><span class="value commit-msg">{data.project.last_commit_message || '—'}</span></div>
+  <div class="row"><span class="label">Synced</span><span class="value">{data.project.last_synced_at ? new Date(data.project.last_synced_at).toLocaleString() : '—'}</span></div>
 </section>
 
 <section class="panel">
@@ -274,15 +299,33 @@
   {:else}
     {#each Object.entries(tasksBySource) as [source, tasks] (source)}
       <div class="task-group">
-        <div class="task-source-label">{sourceIcon(source)}</div>
+        <div class="task-source-label">{source}</div>
         {#each tasks as t (t.id)}
           <div class="task-row">
             <span class="task-name">{t.name}</span>
             <span class="task-cmd">{t.raw_command}</span>
-            <button type="button" disabled title="Wired up in Stage 5">Run</button>
+            <form method="POST" action="?/run" style="margin: 0;">
+              <input type="hidden" name="task_id" value={t.id} />
+              <button type="submit" disabled={data.project.status !== 'ready'}>Run</button>
+            </form>
           </div>
         {/each}
       </div>
     {/each}
   {/if}
 </section>
+
+{#if data.runs.length > 0}
+  <section class="panel">
+    <h2>Recent runs</h2>
+    {#each data.runs.slice(0, 10) as r (r.id)}
+      <a href={`/runs/${r.id}`} class="run-row">
+        <span class="dot" style="background: {statusColor(r.status)}"></span>
+        <span class="run-name">{r.task_name} <span style="color:#6b7280">({r.task_source})</span></span>
+        <span class="run-meta">{r.status}</span>
+        <span class="run-meta">{formatDuration(r.started_at, r.finished_at)}</span>
+        <span class="run-meta">{new Date(r.created_at).toLocaleString()}</span>
+      </a>
+    {/each}
+  </section>
+{/if}

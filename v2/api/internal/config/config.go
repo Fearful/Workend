@@ -10,6 +10,7 @@ type Config struct {
 	DatabaseURL    string
 	DaggerSockPath string
 	ReposRoot      string
+	LogsRoot       string
 	CookieSecure   bool
 }
 
@@ -19,6 +20,7 @@ func Load() (*Config, error) {
 		DatabaseURL:    os.Getenv("WORKEND_DATABASE_URL"),
 		DaggerSockPath: getEnv("WORKEND_DAGGER_SOCK", "/run/dagger/buildkitd.sock"),
 		ReposRoot:      getEnv("WORKEND_REPOS_ROOT", "/repos"),
+		LogsRoot:       getEnv("WORKEND_LOGS_ROOT", "/var/lib/workend/logs"),
 		CookieSecure:   getEnv("WORKEND_COOKIE_SECURE", "false") == "true",
 	}
 

@@ -60,10 +60,12 @@ services:
       WORKEND_DATABASE_URL: "postgres://workend:workend@db:5432/workend?sslmode=disable"
       WORKEND_DAGGER_SOCK: "/run/dagger/buildkitd.sock"
       WORKEND_REPOS_ROOT: "/repos"
+      WORKEND_LOGS_ROOT: "/var/lib/workend/logs"
       _EXPERIMENTAL_DAGGER_RUNNER_HOST: "tcp://dagger-engine:1234"
     volumes:
       - dagger-sock:/run/dagger:ro
       - repos:/repos
+      - logs:/var/lib/workend/logs
     cap_drop:
       - ALL
     security_opt:
@@ -93,3 +95,4 @@ volumes:
   dagger-engine-state:
   dagger-sock:
   repos:
+  logs:

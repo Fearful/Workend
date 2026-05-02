@@ -1,4 +1,4 @@
-import { error, redirect } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { apiFetch } from '$lib/api';
 
@@ -34,6 +34,18 @@ interface Task {
   detected_at: string;
 }
 
+interface Run {
+  id: string;
+  task_id: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  exit_code: number | null;
+  task_name: string;
+  task_source: string;
+  created_at: string;
+}
+
 export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   if (!locals.user) throw redirect(303, '/login');
   const cookie = cookies.get(SESSION_COOKIE);
@@ -43,15 +55,17 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   if (projResult.status === 404) throw error(404, 'project not found');
   if (!projResult.ok || !projResult.data) throw error(500, projResult.error || 'failed to load');
 
-  const [wsResult, tasksResult] = await Promise.all([
+  const [wsResult, tasksResult, runsResult] = await Promise.all([
     apiFetch<Workspace>(`/api/workspaces/${projResult.data.workspace_id}`, { cookie: cookieHeader }),
-    apiFetch<Task[]>(`/api/projects/${params.id}/tasks`, { cookie: cookieHeader })
+    apiFetch<Task[]>(`/api/projects/${params.id}/tasks`, { cookie: cookieHeader }),
+    apiFetch<Run[]>(`/api/projects/${params.id}/runs`, { cookie: cookieHeader })
   ]);
 
   return {
     project: projResult.data,
     workspace: wsResult.ok ? (wsResult.data ?? null) : null,
-    tasks: tasksResult.ok ? (tasksResult.data ?? []) : []
+    tasks: tasksResult.ok ? (tasksResult.data ?? []) : [],
+    runs: runsResult.ok ? (runsResult.data ?? []) : []
   };
 };
 
@@ -78,5 +92,20 @@ export const actions: Actions = {
     });
     if (!result.ok) throw error(result.status, result.error || 'delete failed');
     throw redirect(303, wsID ? `/workspaces/${wsID}` : '/');
+  },
+  run: async ({ request, cookies }) => {
+    const data = await request.formData();
+    const taskID = String(data.get('task_id') || '');
+    if (!taskID) return fail(400, { error: 'task_id required' });
+
+    const cookie = cookies.get(SESSION_COOKIE);
+    const result = await apiFetch<{ id: string }>(`/api/tasks/${taskID}/runs`, {
+      method: 'POST',
+      cookie: cookie ? `${SESSION_COOKIE}=${cookie}` : undefined
+    });
+    if (!result.ok || !result.data) {
+      return fail(result.status, { error: result.error || 'run failed to start' });
+    }
+    throw redirect(303, `/runs/${result.data.id}`);
   }
 };
