@@ -117,6 +117,7 @@
   <a href="/" class="brand">Workend <small>v0.0.1</small></a>
   <nav>
     {#if data.user}
+      <a href="/dashboard">Dashboard</a>
       {#if data.user.is_admin}
         <a href="/admin">Admin</a>
       {/if}

@@ -13,6 +13,7 @@ import (
 	"workend/api/internal/auth"
 	"workend/api/internal/config"
 	wdagger "workend/api/internal/dagger"
+	"workend/api/internal/dashboard"
 	"workend/api/internal/health"
 	"workend/api/internal/oauth"
 	"workend/api/internal/project"
@@ -77,6 +78,7 @@ func (s *Server) Router() http.Handler {
 	}
 	taskH := &task.Handlers{Pool: s.pool}
 	statsH := &stats.Handlers{Pool: s.pool}
+	dashH := &dashboard.Handlers{Pool: s.pool}
 	runH := s.runH
 	schedH := s.schedH
 
@@ -111,6 +113,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/projects/{project_id}/tasks", taskH.ListByProject)
 			r.Get("/projects/{project_id}/runs", runH.ListByProject)
 			r.Get("/me/runs", runH.ListForUser)
+			r.Get("/me/dashboard", dashH.Get)
 
 			r.Post("/tasks/{id}/runs", runH.Create)
 			r.Get("/runs/{id}", runH.Get)
