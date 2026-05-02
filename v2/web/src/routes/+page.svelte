@@ -26,6 +26,15 @@
     border: 1px solid #1f2429;
     border-radius: 8px;
     padding: 1.25rem;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    transition: border-color 100ms ease;
+  }
+
+  .card:hover {
+    border-color: #2563eb;
+    text-decoration: none;
   }
 
   .card h3 {
@@ -40,7 +49,7 @@
     min-height: 1.25rem;
   }
 
-  .card .meta {
+  .meta {
     color: #6b7280;
     font-size: 0.75rem;
     font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -79,11 +88,11 @@
 {:else}
   <div class="grid">
     {#each data.workspaces as ws (ws.id)}
-      <div class="card">
+      <a href={`/workspaces/${ws.id}`} class="card">
         <h3>{ws.name}</h3>
         <p>{ws.description || '—'}</p>
         <div class="meta">created {new Date(ws.created_at).toLocaleDateString()}</div>
-      </div>
+      </a>
     {/each}
   </div>
 {/if}

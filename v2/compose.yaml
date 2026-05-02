@@ -1,7 +1,5 @@
 # Workend v2 — Docker Compose
 #
-# Stage 1: walking skeleton. Four services up, /healthz green from web.
-#
 # Run:   docker compose up --build
 # Then:  open http://localhost:3000
 #
@@ -38,6 +36,7 @@ services:
     volumes:
       - dagger-engine-state:/var/lib/dagger
       - dagger-sock:/run/dagger
+      - repos:/repos
     command:
       - "--addr"
       - "unix:///run/dagger/buildkitd.sock"
@@ -60,8 +59,11 @@ services:
       WORKEND_LISTEN_ADDR: ":8080"
       WORKEND_DATABASE_URL: "postgres://workend:workend@db:5432/workend?sslmode=disable"
       WORKEND_DAGGER_SOCK: "/run/dagger/buildkitd.sock"
+      WORKEND_REPOS_ROOT: "/repos"
+      _EXPERIMENTAL_DAGGER_RUNNER_HOST: "tcp://dagger-engine:1234"
     volumes:
       - dagger-sock:/run/dagger:ro
+      - repos:/repos
     cap_drop:
       - ALL
     security_opt:
@@ -90,3 +92,4 @@ volumes:
   db-data:
   dagger-engine-state:
   dagger-sock:
+  repos:

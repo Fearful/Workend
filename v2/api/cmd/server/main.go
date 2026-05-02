@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"workend/api/internal/config"
+	wdagger "workend/api/internal/dagger"
 	"workend/api/internal/db"
 	"workend/api/internal/server"
 )
@@ -42,7 +43,14 @@ func main() {
 	}
 	defer pool.Close()
 
-	srv := server.New(cfg, pool, logger)
+	dc := wdagger.NewClient()
+	defer func() {
+		if err := dc.Close(); err != nil {
+			logger.Warn("dagger close", "err", err)
+		}
+	}()
+
+	srv := server.New(cfg, pool, dc, logger)
 
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,
