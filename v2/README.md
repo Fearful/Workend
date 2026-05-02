@@ -4,9 +4,9 @@ Self-hosted, browser-based developer workstation.
 
 Pick a git repo, see what's runnable in it, run those tasks reproducibly in isolated containers, watch the output live, schedule them, build images from Dockerfiles, get notified on failures, keep a log of every run.
 
-## Status: v0.5.0
+## Status: v0.6.0
 
-Stages 0–22 of [PLAN.md](PLAN.md) are complete. The system covers the full lifecycle of "manage shared repos across providers, run things in them, see and compare results, schedule and webhook-trigger them, and back up the whole thing."
+Stages 0–22 + 24–28 of [PLAN.md](PLAN.md) are complete (Stage 23 — true incremental log streaming — is deliberately deferred). The system handles multi-user shared workspaces across multiple OAuth providers, with HMAC-verified webhooks, per-user disk quotas, lazy token refresh on both expiry and 401, and a scheduler safe to run on multiple replicas.
 
 See [OBJECTIVE.md](OBJECTIVE.md) for vision, [PLAN.md](PLAN.md) for the staged build plan, [ARCHITECTURE.md](ARCHITECTURE.md) for technical design.
 
@@ -71,13 +71,19 @@ openssl rand -base64 32
 
 **Multi-provider + advanced (Stages 15–22)**
 - GitLab + Gitea OAuth alongside GitHub; multiple instances per provider
-- Repo browser when adding a project (pick from any connected provider)
+- Repo browser when adding a project (pick from any connected provider, with filter)
 - Diff view between two runs of the same task
 - Workspace sharing: invite by email, owner / member roles, leave / remove
 - Webhook-triggered syncs (per-project token URL)
 - Backup / restore scripts (pg_dump + volume tars)
 - Pluggable custom detectors via JSON config (Makefile / Cargo / Taskfile out of the box)
 - Dagger task source: `dagger.json` projects expose their functions as runnable tasks
+
+**Polish + hardening (Stages 24–28)**
+- HMAC webhook signature verification (per-project secret; github / gitea / gitlab header schemes)
+- Per-user disk quotas with pre-clone gate; `/api/me/usage` for the dashboard
+- Lazy-on-401 token refresh (in addition to lazy-on-expiry from Stage 15)
+- Multi-instance-safe scheduler (`SELECT ... FOR UPDATE SKIP LOCKED`)
 
 ## What's not here
 
@@ -89,16 +95,14 @@ openssl rand -base64 32
 - Per-user disk quotas (concurrent-run limit is enforced; disk is not)
 - Repo browser search / filter (paging only)
 
-## Honest limitations in v0.5.0
+## Honest limitations in v0.6.0
 
-- **Live log streaming is structurally complete but materially batched.** Dagger v0.13's `container.Stdout()` only returns once the container exits. SSE plumbing is correct; expect a single large delivery at completion. Stage 23 territory.
+- **Live log streaming is structurally complete but materially batched.** Dagger v0.13's `container.Stdout()` only returns once the container exits. SSE plumbing is correct; expect a single large delivery at completion. Stage 23 — the runner rewrite that fixes this — is deliberately deferred.
 - **Re-run uses current repo HEAD**, not the original run's commit.
-- **Single-instance scheduler.** The cron ticker runs in the api process. Don't horizontally scale the api yet — schedules will fire multiple times.
-- **No per-user disk quotas.** Concurrent-run limit is enforced (3 active per user); disk is not.
 - **Image build size is not reported.** Without a registry to inspect against, the size we'd report would be the exported tarball size.
-- **Webhook auth is the URL token.** No per-provider HMAC signature verification yet (Stage 24).
 - **Self-signed TLS on self-hosted Gitea/GitLab** isn't supported out of the box — Workend's HTTP client doesn't bundle custom CAs. Mount one into the api container if you need it.
-- **Token refresh is lazy-on-expiry**, not lazy-on-401. If a provider revokes a token mid-validity-window you'll see a clone failure rather than an automatic refresh + retry.
+- **Repo browser search is page-local.** Filter applies only to the currently loaded page (50 repos at a time).
+- **Disk-quota check walks the filesystem on every clone.** Fine for small repo counts; consider caching if you have hundreds of projects.
 
 ## Stack
 

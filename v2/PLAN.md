@@ -518,17 +518,40 @@ A provider is enabled only if its `_CLIENT_ID` and `_CLIENT_SECRET` are set. Wor
   `dagger call <fn>` as the run command. Run executor recognizes
   `source='dagger'` and uses the dagger CLI image as the base.
 
-## Stages Beyond (open headers)
+## Stages 24–28 (DONE)
+
+- **Stage 24** — Per-project webhook secret + HMAC signature verification.
+  Header schemes for github (`X-Hub-Signature-256`), gitea
+  (`X-Gitea-Signature`), gitlab (`X-Gitlab-Token` plain shared token).
+  Constant-time compare. Backwards-compatible: secret is nullable, and
+  the URL-token-only flow from Stage 19 keeps working when secret is
+  unset.
+- **Stage 25** — Client-side filter input on the repo picker. Filters
+  the currently loaded page only; cross-page search would need
+  provider-specific search APIs.
+- **Stage 26** — `users.quota_bytes` (default 5 GiB). Pre-clone gate in
+  `project.cloneAsync` checks workspace creator's total used bytes via
+  filesystem walk; refuses if at or above quota. `GET /api/me/usage`
+  returns total + per-workspace breakdown. Storage charged to the
+  workspace creator, not split among members.
+- **Stage 27** — `Registry.ForceRefresh` + retry-once on 401 in
+  `ListReposForUser`. Catches the case where a token gets revoked
+  mid-validity-window or our local `expires_at` is wrong. Stage 15
+  lazy-on-expiry path unchanged.
+- **Stage 28** — Cron ticker claims due rows via
+  `SELECT ... FOR UPDATE OF s SKIP LOCKED` inside a transaction,
+  advances `next_run_at` within the tx, commits, then enqueues runs.
+  Multiple API replicas running concurrently won't double-fire any
+  schedule.
+
+## Stage 23 (deferred)
 
 - **Stage 23** — True line-by-line live log streaming (rework the runner
-  to produce incremental output instead of a final dump)
-- **Stage 24** — Provider webhook signature verification (HMAC per
-  project)
-- **Stage 25** — Repo browser search / filter
-- **Stage 26** — Per-user disk quotas
-- **Stage 27** — Lazy-on-401 token refresh (in addition to lazy-on-expiry)
-- **Stage 28** — Multi-instance scheduler (when horizontal API scaling
-  becomes real)
+  to produce incremental output instead of a final dump). Skipped
+  intentionally: needs a substantial Dagger SDK refactor or a wrapper
+  around `dagger session` to capture stdout incrementally. The current
+  SSE plumbing is correct; only the data shape arrives in one big
+  blob at the end.
 
 ---
 
