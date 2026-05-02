@@ -47,6 +47,15 @@
     const d = Math.floor(hr / 24);
     return `${d}d ago`;
   }
+
+  let filter = $state('');
+  let visibleRepos = $derived.by(() => {
+    if (!filter.trim()) return data.repos;
+    const q = filter.toLowerCase();
+    return data.repos.filter(
+      (r) => r.full_name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q)
+    );
+  });
 </script>
 
 <style>
@@ -157,18 +166,28 @@
       {:else if data.repos.length === 0}
         <div class="panel empty">No repos returned for page {data.page}.</div>
       {:else}
+        <input
+          type="text"
+          placeholder="Filter this page…"
+          bind:value={filter}
+          style="margin-bottom: 0.5rem; padding: 0.4rem 0.75rem; background: #14181d; color: #e8eaed; border: 1px solid #2d3540; border-radius: 6px; font: inherit; font-size: 0.875rem; width: 100%; box-sizing: border-box;"
+        />
         <div class="panel" style="padding: 0.5rem 0.75rem;">
-          {#each data.repos as r (r.full_name)}
-            <button type="button" class="repo-row" onclick={() => pickRepo(r.name, r.clone_url, r.default_branch)}>
-              <div class="repo-name">
-                {r.full_name}
-                {#if r.private}<span class="lock">🔒</span>{/if}
-                {#if r.description}<div class="desc">{r.description}</div>{/if}
-              </div>
-              <div class="repo-meta">{r.default_branch}</div>
-              <div class="repo-meta">{formatRelative(r.updated_at)}</div>
-            </button>
-          {/each}
+          {#if visibleRepos.length === 0}
+            <div class="empty" style="background:transparent; border:none;">No repos match <code>{filter}</code>.</div>
+          {:else}
+            {#each visibleRepos as r (r.full_name)}
+              <button type="button" class="repo-row" onclick={() => pickRepo(r.name, r.clone_url, r.default_branch)}>
+                <div class="repo-name">
+                  {r.full_name}
+                  {#if r.private}<span class="lock">🔒</span>{/if}
+                  {#if r.description}<div class="desc">{r.description}</div>{/if}
+                </div>
+                <div class="repo-meta">{r.default_branch}</div>
+                <div class="repo-meta">{formatRelative(r.updated_at)}</div>
+              </button>
+            {/each}
+          {/if}
         </div>
         <div class="pager">
           {#if data.page > 1}<a href={pageURL(data.page - 1)}>← prev</a>{/if}
