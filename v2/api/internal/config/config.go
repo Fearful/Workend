@@ -17,6 +17,12 @@ type Config struct {
 	GitHubClientID     string
 	GitHubClientSecret string
 	GitHubRedirectURL  string
+
+	WebPublicURL string
+	SMTPHost     string
+	SMTPFrom     string
+	SMTPUsername string
+	SMTPPassword string
 }
 
 func Load() (*Config, error) {
@@ -32,6 +38,12 @@ func Load() (*Config, error) {
 		GitHubClientID:     os.Getenv("WORKEND_GITHUB_CLIENT_ID"),
 		GitHubClientSecret: os.Getenv("WORKEND_GITHUB_CLIENT_SECRET"),
 		GitHubRedirectURL:  getEnv("WORKEND_GITHUB_REDIRECT_URL", "http://localhost:3000/auth/github/callback"),
+
+		WebPublicURL: getEnv("WORKEND_WEB_PUBLIC_URL", "http://localhost:3000"),
+		SMTPHost:     os.Getenv("WORKEND_SMTP_HOST"),
+		SMTPFrom:     os.Getenv("WORKEND_SMTP_FROM"),
+		SMTPUsername: os.Getenv("WORKEND_SMTP_USERNAME"),
+		SMTPPassword: os.Getenv("WORKEND_SMTP_PASSWORD"),
 	}
 
 	if cfg.DatabaseURL == "" {

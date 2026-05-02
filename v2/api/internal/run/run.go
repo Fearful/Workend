@@ -21,6 +21,7 @@ import (
 	"workend/api/internal/audit"
 	"workend/api/internal/auth"
 	wdagger "workend/api/internal/dagger"
+	"workend/api/internal/notify"
 )
 
 // MaxConcurrentRunsPerUser caps active (queued|running) runs per user.
@@ -59,6 +60,8 @@ type Handlers struct {
 	LogsRoot string
 	Logger   *slog.Logger
 	Audit    *audit.Logger
+	Notify   *notify.Dispatcher
+	WebURL   string
 
 	mu         sync.Mutex
 	running    map[uuid.UUID]uuid.UUID            // task_id -> run_id
@@ -263,6 +266,65 @@ func (h *Handlers) markFinished(runID uuid.UUID, status string, exitCode int, fi
 	`, status, exitCode, finishedAt, runID); err != nil {
 		h.Logger.Error("mark finished failed", "run", runID, "err", err)
 	}
+	h.fireNotification(runID, status, exitCode, finishedAt)
+}
+
+// fireNotification builds an Event from the run's metadata and invokes the
+// dispatcher. Best-effort.
+func (h *Handlers) fireNotification(runID uuid.UUID, status string, exitCode int, finishedAt time.Time) {
+	if h.Notify == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var (
+		userID      uuid.UUID
+		projectID   uuid.UUID
+		projectName string
+		taskName    string
+		taskSource  string
+		startedAt   *time.Time
+		prevStatus  *string
+	)
+	err := h.Pool.QueryRow(ctx, `
+		SELECT w.user_id, p.id, p.name, t.name, t.source, r.started_at,
+		       (SELECT status FROM runs r2
+		        WHERE r2.task_id = r.task_id AND r2.id <> r.id
+		        ORDER BY r2.created_at DESC LIMIT 1) AS prev_status
+		FROM runs r
+		JOIN tasks t      ON t.id = r.task_id
+		JOIN projects p   ON p.id = r.project_id
+		JOIN workspaces w ON w.id = p.workspace_id
+		WHERE r.id = $1
+	`, runID).Scan(&userID, &projectID, &projectName, &taskName, &taskSource, &startedAt, &prevStatus)
+	if err != nil {
+		h.Logger.Warn("notify: load event metadata failed", "run", runID, "err", err)
+		return
+	}
+
+	durSec := 0
+	if startedAt != nil {
+		durSec = int(finishedAt.Sub(*startedAt).Seconds())
+	}
+	prev := ""
+	if prevStatus != nil {
+		prev = *prevStatus
+	}
+
+	h.Notify.OnRunComplete(notify.Event{
+		RunID:       runID,
+		UserID:      userID,
+		ProjectID:   projectID,
+		ProjectName: projectName,
+		TaskName:    taskName,
+		TaskSource:  taskSource,
+		Status:      status,
+		PrevStatus:  prev,
+		ExitCode:    exitCode,
+		DurationSec: durSec,
+		URL:         h.WebURL + "/runs/" + runID.String(),
+	})
 }
 
 func (h *Handlers) markFailed(runID uuid.UUID, exitCode int, msg string) {

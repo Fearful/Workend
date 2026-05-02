@@ -67,6 +67,14 @@ services:
       WORKEND_GITHUB_CLIENT_SECRET: "${WORKEND_GITHUB_CLIENT_SECRET:-}"
       WORKEND_GITHUB_REDIRECT_URL: "${WORKEND_GITHUB_REDIRECT_URL:-http://localhost:3000/auth/github/callback}"
       WORKEND_TOKEN_KEY: "${WORKEND_TOKEN_KEY:-}"
+      # Public URL the web frontend is reachable at (used for run links in
+      # notifications). Defaults to localhost:3000 for local dev.
+      WORKEND_WEB_PUBLIC_URL: "${WORKEND_WEB_PUBLIC_URL:-http://localhost:3000}"
+      # SMTP for email notifications (optional).
+      WORKEND_SMTP_HOST: "${WORKEND_SMTP_HOST:-}"
+      WORKEND_SMTP_FROM: "${WORKEND_SMTP_FROM:-}"
+      WORKEND_SMTP_USERNAME: "${WORKEND_SMTP_USERNAME:-}"
+      WORKEND_SMTP_PASSWORD: "${WORKEND_SMTP_PASSWORD:-}"
       _EXPERIMENTAL_DAGGER_RUNNER_HOST: "tcp://dagger-engine:1234"
     volumes:
       - dagger-sock:/run/dagger:ro

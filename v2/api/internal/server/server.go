@@ -16,6 +16,7 @@ import (
 	"workend/api/internal/dashboard"
 	"workend/api/internal/health"
 	"workend/api/internal/image"
+	"workend/api/internal/notify"
 	"workend/api/internal/oauth"
 	"workend/api/internal/project"
 	"workend/api/internal/run"
@@ -32,20 +33,32 @@ type Server struct {
 	github   *oauth.GitHub
 	logger   *slog.Logger
 	auditLog *audit.Logger
+	notif    *notify.Dispatcher
 	runH     *run.Handlers
 	schedH   *schedule.Handlers
 }
 
 func New(cfg *config.Config, pool *pgxpool.Pool, dc *wdagger.Client, gh *oauth.GitHub, logger *slog.Logger) *Server {
 	auditLog := &audit.Logger{Pool: pool, Log: logger}
+
+	var smtpCfg *notify.SMTP
+	if cfg.SMTPHost != "" {
+		smtpCfg = &notify.SMTP{
+			Host: cfg.SMTPHost, From: cfg.SMTPFrom,
+			Username: cfg.SMTPUsername, Password: cfg.SMTPPassword,
+		}
+	}
+	notif := notify.New(pool, logger, smtpCfg, cfg.WebPublicURL)
+
 	runH := &run.Handlers{
 		Pool: pool, Dagger: dc, LogsRoot: cfg.LogsRoot, Logger: logger, Audit: auditLog,
+		Notify: notif, WebURL: cfg.WebPublicURL,
 	}
 	runH.Init()
 	schedH := schedule.NewHandlers(pool, dc, logger, auditLog)
 	return &Server{
 		cfg: cfg, pool: pool, dagger: dc, github: gh, logger: logger,
-		auditLog: auditLog, runH: runH, schedH: schedH,
+		auditLog: auditLog, notif: notif, runH: runH, schedH: schedH,
 	}
 }
 
@@ -81,6 +94,7 @@ func (s *Server) Router() http.Handler {
 	statsH := &stats.Handlers{Pool: s.pool}
 	dashH := &dashboard.Handlers{Pool: s.pool}
 	imgH := &image.Handlers{Pool: s.pool}
+	notifH := &notify.Handlers{D: s.notif}
 	runH := s.runH
 	schedH := s.schedH
 
@@ -129,6 +143,11 @@ func (s *Server) Router() http.Handler {
 			r.Post("/schedules/{id}/toggle", schedH.Toggle)
 
 			r.Get("/projects/{project_id}/images", imgH.ListByProject)
+
+			r.Get("/me/notifications", notifH.List)
+			r.Post("/me/notifications", notifH.Create)
+			r.Delete("/me/notifications/{id}", notifH.Delete)
+			r.Post("/me/notifications/{id}/test", notifH.Test)
 
 			r.Group(func(r chi.Router) {
 				r.Use(admin.RequireAdmin(s.pool))

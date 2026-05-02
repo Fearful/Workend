@@ -34,6 +34,10 @@
 
 <h1>Settings</h1>
 
+<p style="margin: -1rem 0 1.5rem 0; color: #9ca3af; font-size: 0.875rem;">
+  <a href="/settings/notifications">→ Notification targets</a>
+</p>
+
 <section class="panel">
   <h2>Account</h2>
   <div class="row"><span class="label">Display name</span><span class="value">{data.user?.display_name}</span></div>
