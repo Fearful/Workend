@@ -29,6 +29,12 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   if (runResult.status === 404) throw error(404, 'run not found');
   if (!runResult.ok || !runResult.data) throw error(500, runResult.error || 'failed to load');
 
+  // Recent runs of the same task — used by the "Compare with…" dropdown.
+  const recentResult = await apiFetch<Run[]>(`/api/projects/${runResult.data.project_id}/runs`, { cookie: cookieHeader });
+  const recentRuns = recentResult.ok && recentResult.data
+    ? recentResult.data.filter((r) => r.task_id === runResult.data!.task_id && r.id !== params.id).slice(0, 10)
+    : [];
+
   // For terminal runs, fetch the full log up-front. For active runs, the
   // browser will subscribe to the SSE stream.
   let log = '';
@@ -48,7 +54,7 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
     }
   }
 
-  return { run: runResult.data, log };
+  return { run: runResult.data, log, recentRuns };
 };
 
 export const actions: Actions = {

@@ -292,6 +292,19 @@
       <form method="POST" action="?/rerun" style="margin: 0;">
         <button type="submit">Re-run</button>
       </form>
+      {#if data.recentRuns.length > 0}
+        <select class="ghost"
+                style="background:#14181d; color:#9ca3af; border:1px solid #2d3540; padding:0.5rem 0.75rem; border-radius:6px; font: inherit; font-size:0.875rem;"
+                onchange={(e) => {
+                  const id = (e.currentTarget as HTMLSelectElement).value;
+                  if (id) window.location.href = `/runs/${data.run.id}/compare/${id}`;
+                }}>
+          <option value="">Compare with…</option>
+          {#each data.recentRuns as r (r.id)}
+            <option value={r.id}>{r.status} · {r.created_at.slice(0, 16).replace('T', ' ')}</option>
+          {/each}
+        </select>
+      {/if}
     {/if}
   </div>
 </div>

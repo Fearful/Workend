@@ -140,6 +140,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/runs/{id}", runH.Get)
 			r.Get("/runs/{id}/log", runH.GetLog)
 			r.Get("/runs/{id}/log/stream", runH.Stream)
+			r.Get("/runs/{id}/compare", runH.Compare)
 			r.Post("/runs/{id}/cancel", runH.Cancel)
 
 			r.Get("/projects/{project_id}/schedules", schedH.ListByProject)

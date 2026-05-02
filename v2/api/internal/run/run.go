@@ -21,6 +21,7 @@ import (
 	"workend/api/internal/audit"
 	"workend/api/internal/auth"
 	wdagger "workend/api/internal/dagger"
+	"workend/api/internal/diff"
 	"workend/api/internal/notify"
 )
 
@@ -330,6 +331,49 @@ func (h *Handlers) fireNotification(runID uuid.UUID, status string, exitCode int
 func (h *Handlers) markFailed(runID uuid.UUID, exitCode int, msg string) {
 	h.Logger.Warn("run failed", "run", runID, "msg", msg)
 	h.markFinished(runID, StatusFailed, exitCode, time.Now())
+}
+
+// Compare returns metadata for two runs of the same task plus a line-level
+// diff of their captured logs.
+// GET /api/runs/:id/compare?to=<other_id>
+func (h *Handlers) Compare(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	leftID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid run id", http.StatusBadRequest)
+		return
+	}
+	rightID, err := uuid.Parse(r.URL.Query().Get("to"))
+	if err != nil {
+		http.Error(w, "invalid 'to' run id", http.StatusBadRequest)
+		return
+	}
+
+	left, err := h.fetchOwned(r.Context(), uid, leftID)
+	if err != nil {
+		http.Error(w, "left run not found", http.StatusNotFound)
+		return
+	}
+	right, err := h.fetchOwned(r.Context(), uid, rightID)
+	if err != nil {
+		http.Error(w, "right run not found", http.StatusNotFound)
+		return
+	}
+	if left.TaskID != right.TaskID {
+		http.Error(w, "runs are of different tasks", http.StatusBadRequest)
+		return
+	}
+
+	leftLog, _ := os.ReadFile(left.LogPath)
+	rightLog, _ := os.ReadFile(right.LogPath)
+	hunks := diff.Lines(string(leftLog), string(rightLog))
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"left":  left,
+		"right": right,
+		"diff":  hunks,
+	})
 }
 
 // EnqueueForUser starts a run on behalf of a user (no HTTP context). Used
