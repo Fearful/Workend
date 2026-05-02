@@ -489,16 +489,46 @@ A provider is enabled only if its `_CLIENT_ID` and `_CLIENT_SECRET` are set. Wor
 
 ---
 
-## Stages Beyond
+## Stages 17–22 (DONE)
 
-Captured here as headers only — fill in when relevant:
+- **Stage 17** — Diff view between runs. Hand-rolled LCS line diff in
+  `internal/diff`; `GET /api/runs/:id/compare?to=<other>`; side-by-side
+  metadata + colored unified diff page.
+- **Stage 18** — Workspace sharing between users. `workspace_members` table
+  with owner/member roles; every owner-check rewritten to JOIN through
+  membership; member CRUD endpoints; "leave / remove / invite by email"
+  UI. Concurrent-run limit now correctly counts across shared workspaces.
+- **Stage 19** — Webhook-triggered syncs. Per-project `webhook_token`
+  (random 24-byte base64); public `POST /api/webhooks/projects/{token}`
+  triggers the same sync goroutine the manual button uses. Webhook URL
+  + Copy button on the project page. Provider-signature verification not
+  implemented (token-in-URL is the entire auth surface).
+- **Stage 20** — Backup/restore. `scripts/backup.sh` does pg_dump +
+  volume tars into a timestamped dir; `scripts/restore.sh` reverses it
+  with a confirmation prompt. WAL archiving / PITR out of scope.
+- **Stage 21** — Pluggable custom detectors. Declarative JSON config at
+  `WORKEND_DETECTORS_FILE`: each entry specifies manifest + image +
+  setup + detect_cmd + run_cmd_template. Detector runs the cmd inside a
+  Dagger container, parses stdout (one task per line), records as
+  Tasks. Example config in `v2/examples/detectors.example.json` covers
+  Makefile / Cargo.toml / Taskfile.yml.
+- **Stage 22** — Dagger task source. New built-in detector for
+  `dagger.json`: shells out to `dagger functions` inside the official
+  CLI container, parses the table, emits one task per function with
+  `dagger call <fn>` as the run command. Run executor recognizes
+  `source='dagger'` and uses the dagger CLI image as the base.
 
-- **Stage 17** — Diff view between runs
-- **Stage 18** — Workspace sharing between users
-- **Stage 19** — Webhook-triggered syncs (push to repo → auto-sync → optional auto-run)
-- **Stage 20** — Backup/restore of the Workend instance
-- **Stage 21** — Plugin system for custom detectors / runners
-- **Stage 22** — Task templates / shared Dagger modules from Daggerverse
+## Stages Beyond (open headers)
+
+- **Stage 23** — True line-by-line live log streaming (rework the runner
+  to produce incremental output instead of a final dump)
+- **Stage 24** — Provider webhook signature verification (HMAC per
+  project)
+- **Stage 25** — Repo browser search / filter
+- **Stage 26** — Per-user disk quotas
+- **Stage 27** — Lazy-on-401 token refresh (in addition to lazy-on-expiry)
+- **Stage 28** — Multi-instance scheduler (when horizontal API scaling
+  becomes real)
 
 ---
 

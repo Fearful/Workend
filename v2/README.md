@@ -4,9 +4,9 @@ Self-hosted, browser-based developer workstation.
 
 Pick a git repo, see what's runnable in it, run those tasks reproducibly in isolated containers, watch the output live, schedule them, build images from Dockerfiles, get notified on failures, keep a log of every run.
 
-## Status: v0.2.0
+## Status: v0.5.0
 
-Stages 0–14 of [PLAN.md](PLAN.md) are complete. The system covers the full lifecycle of "manage repos, run things in them, see results."
+Stages 0–22 of [PLAN.md](PLAN.md) are complete. The system covers the full lifecycle of "manage shared repos across providers, run things in them, see and compare results, schedule and webhook-trigger them, and back up the whole thing."
 
 See [OBJECTIVE.md](OBJECTIVE.md) for vision, [PLAN.md](PLAN.md) for the staged build plan, [ARCHITECTURE.md](ARCHITECTURE.md) for technical design.
 
@@ -49,11 +49,11 @@ All optional — Workend works fine without them.
 openssl rand -base64 32
 ```
 
-## What's in v0.2.0
+## What's in v0.5.0
 
 **Core (Stages 0–7, MVP)**
 - Local password auth (argon2id), session cookies
-- Workspaces and projects (per-user)
+- Workspaces and projects
 - Repo ingestion via Dagger pipeline (public HTTPS git)
 - Task autodetection: `package.json` scripts, `justfile` recipes, `Dockerfile`
 - Task execution in pinned container images
@@ -63,27 +63,42 @@ openssl rand -base64 32
 **Post-MVP (Stages 8–14)**
 - Code statistics via `tokei` in a Dagger container
 - GitHub OAuth + private repo cloning (token encrypted at rest)
-- Multi-user polish: audit log, concurrent-run limits, admin role + page
+- Audit log, concurrent-run limits, admin role + page
 - Scheduled runs via cron (5-field), in-process scheduler
 - Cross-project dashboard with per-project health cards
-- Image builds via Dagger BuildKit (Dockerfile detection, image registry table)
-- Notifications: webhook, Slack webhook, email (SMTP) — per-user, per-trigger
+- Image builds via Dagger BuildKit
+- Notifications: webhook, Slack webhook, email (SMTP)
+
+**Multi-provider + advanced (Stages 15–22)**
+- GitLab + Gitea OAuth alongside GitHub; multiple instances per provider
+- Repo browser when adding a project (pick from any connected provider)
+- Diff view between two runs of the same task
+- Workspace sharing: invite by email, owner / member roles, leave / remove
+- Webhook-triggered syncs (per-project token URL)
+- Backup / restore scripts (pg_dump + volume tars)
+- Pluggable custom detectors via JSON config (Makefile / Cargo / Taskfile out of the box)
+- Dagger task source: `dagger.json` projects expose their functions as runnable tasks
 
 ## What's not here
 
-- GitLab / Bitbucket OAuth (extension point exists; only GitHub implemented)
-- Sharing workspaces between users (Stage 17)
-- Image push to a registry (deferred — local builds only)
+- Bitbucket OAuth (the extension point exists — implement the `oauth.Provider` interface)
+- Image push to a registry (local builds only; runs record digest + size)
 - Discord / Teams notification channels
 - True line-by-line live log streaming (see "Honest limitations")
+- Provider webhook signature verification (token-in-URL is the auth)
+- Per-user disk quotas (concurrent-run limit is enforced; disk is not)
+- Repo browser search / filter (paging only)
 
-## Honest limitations in v0.2.0
+## Honest limitations in v0.5.0
 
-- **Live log streaming is structurally complete but materially batched.** Dagger v0.13's `container.Stdout()` only returns once the container exits, so the log file is written once at the end. The SSE plumbing is correct — the browser gets a `log` event followed by a `done` event — but expect a single large delivery at completion. Reworking the runner for true incremental output is a planned post-v0.2 refactor.
-- **Re-run uses current repo HEAD**, not the original run's commit. Surprising-but-defensible default.
+- **Live log streaming is structurally complete but materially batched.** Dagger v0.13's `container.Stdout()` only returns once the container exits. SSE plumbing is correct; expect a single large delivery at completion. Stage 23 territory.
+- **Re-run uses current repo HEAD**, not the original run's commit.
 - **Single-instance scheduler.** The cron ticker runs in the api process. Don't horizontally scale the api yet — schedules will fire multiple times.
 - **No per-user disk quotas.** Concurrent-run limit is enforced (3 active per user); disk is not.
-- **Image build size is not reported.** Without a registry to inspect against, the size we'd report would be the exported tarball size, which would mislead.
+- **Image build size is not reported.** Without a registry to inspect against, the size we'd report would be the exported tarball size.
+- **Webhook auth is the URL token.** No per-provider HMAC signature verification yet (Stage 24).
+- **Self-signed TLS on self-hosted Gitea/GitLab** isn't supported out of the box — Workend's HTTP client doesn't bundle custom CAs. Mount one into the api container if you need it.
+- **Token refresh is lazy-on-expiry**, not lazy-on-401. If a provider revokes a token mid-validity-window you'll see a clone failure rather than an automatic refresh + retry.
 
 ## Stack
 
