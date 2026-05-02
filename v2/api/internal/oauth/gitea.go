@@ -125,6 +125,61 @@ func (g *Gitea) FetchHandle(ctx context.Context, accessToken string) (string, er
 	return u.Login, nil
 }
 
+func (g *Gitea) ListRepos(ctx context.Context, accessToken string, page, perPage int) ([]Repo, error) {
+	if perPage < 1 || perPage > 50 {
+		perPage = 50
+	}
+	if page < 1 {
+		page = 1
+	}
+	q := url.Values{}
+	q.Set("limit", fmt.Sprintf("%d", perPage))
+	q.Set("page", fmt.Sprintf("%d", page))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.instanceURL+"/api/v1/user/repos?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("gitea /user/repos status %d: %s", resp.StatusCode, string(raw))
+	}
+	var rows []struct {
+		Name          string `json:"name"`
+		FullName      string `json:"full_name"`
+		Description   string `json:"description"`
+		Private       bool   `json:"private"`
+		HTMLURL       string `json:"html_url"`
+		CloneURL      string `json:"clone_url"`
+		DefaultBranch string `json:"default_branch"`
+		UpdatedAt     string `json:"updated_at"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		return nil, err
+	}
+	out := make([]Repo, 0, len(rows))
+	for _, r := range rows {
+		var ts *time.Time
+		if r.UpdatedAt != "" {
+			if t, err := time.Parse(time.RFC3339, r.UpdatedAt); err == nil {
+				ts = &t
+			}
+		}
+		out = append(out, Repo{
+			Name: r.Name, FullName: r.FullName, Description: r.Description,
+			Private: r.Private, HTMLURL: r.HTMLURL, CloneURL: r.CloneURL,
+			DefaultBranch: r.DefaultBranch, UpdatedAt: ts,
+		})
+	}
+	return out, nil
+}
+
 // InjectCloneAuth: https://<token>@host/path  (Gitea accepts token-as-username)
 func (g *Gitea) InjectCloneAuth(rawURL, accessToken string) string {
 	if !OwnsURL(g, rawURL) {

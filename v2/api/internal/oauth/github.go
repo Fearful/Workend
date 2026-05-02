@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // GitHub is the OAuth Provider for github.com (Enterprise via instanceURL).
@@ -126,6 +127,64 @@ func (g *GitHub) FetchHandle(ctx context.Context, accessToken string) (string, e
 		return "", err
 	}
 	return u.Login, nil
+}
+
+func (g *GitHub) ListRepos(ctx context.Context, accessToken string, page, perPage int) ([]Repo, error) {
+	if perPage < 1 || perPage > 100 {
+		perPage = 50
+	}
+	if page < 1 {
+		page = 1
+	}
+	q := url.Values{}
+	q.Set("per_page", fmt.Sprintf("%d", perPage))
+	q.Set("page", fmt.Sprintf("%d", page))
+	q.Set("sort", "updated")
+	q.Set("affiliation", "owner,collaborator,organization_member")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.apiBase()+"/user/repos?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("github /user/repos status %d: %s", resp.StatusCode, string(raw))
+	}
+	var rows []struct {
+		Name          string `json:"name"`
+		FullName      string `json:"full_name"`
+		Description   string `json:"description"`
+		Private       bool   `json:"private"`
+		HTMLURL       string `json:"html_url"`
+		CloneURL      string `json:"clone_url"`
+		DefaultBranch string `json:"default_branch"`
+		UpdatedAt     string `json:"updated_at"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		return nil, err
+	}
+	out := make([]Repo, 0, len(rows))
+	for _, r := range rows {
+		var ts *time.Time
+		if r.UpdatedAt != "" {
+			if t, err := time.Parse(time.RFC3339, r.UpdatedAt); err == nil {
+				ts = &t
+			}
+		}
+		out = append(out, Repo{
+			Name: r.Name, FullName: r.FullName, Description: r.Description,
+			Private: r.Private, HTMLURL: r.HTMLURL, CloneURL: r.CloneURL,
+			DefaultBranch: r.DefaultBranch, UpdatedAt: ts,
+		})
+	}
+	return out, nil
 }
 
 // InjectCloneAuth: https://x-access-token:<token>@host/path

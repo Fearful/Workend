@@ -9,15 +9,66 @@ interface Workspace {
   name: string;
 }
 
-export const load: PageServerLoad = async ({ params, locals, cookies }) => {
+interface ConnectionView {
+  provider_id: string;
+  provider: string;
+  instance_url: string;
+  instance_host: string;
+  connected: boolean;
+  handle?: string;
+}
+
+interface Repo {
+  name: string;
+  full_name: string;
+  description: string;
+  private: boolean;
+  html_url: string;
+  clone_url: string;
+  default_branch: string;
+  updated_at: string | null;
+}
+
+export const load: PageServerLoad = async ({ params, url, locals, cookies }) => {
   if (!locals.user) throw redirect(303, '/login');
   const cookie = cookies.get(SESSION_COOKIE);
-  const result = await apiFetch<Workspace>(`/api/workspaces/${params.id}`, {
-    cookie: cookie ? `${SESSION_COOKIE}=${cookie}` : undefined
-  });
-  if (result.status === 404) throw error(404, 'workspace not found');
-  if (!result.ok || !result.data) throw error(500, result.error || 'failed to load workspace');
-  return { workspace: result.data };
+  const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
+
+  const wsResult = await apiFetch<Workspace>(`/api/workspaces/${params.id}`, { cookie: cookieHeader });
+  if (wsResult.status === 404) throw error(404, 'workspace not found');
+  if (!wsResult.ok || !wsResult.data) throw error(500, wsResult.error || 'failed to load workspace');
+
+  const connectionsResult = await apiFetch<ConnectionView[]>('/api/me/connections', { cookie: cookieHeader });
+  const connections = connectionsResult.ok ? (connectionsResult.data ?? []) : [];
+  const connectedProviders = connections.filter((c) => c.connected);
+
+  // If a `from` query param names a connected provider, fetch its repos.
+  const from = url.searchParams.get('from') || '';
+  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+  let repos: Repo[] = [];
+  let reposError: string | null = null;
+  let activeProvider: ConnectionView | null = null;
+
+  if (from) {
+    activeProvider = connectedProviders.find((c) => c.provider_id === from) ?? null;
+    if (activeProvider) {
+      const r = await apiFetch<Repo[]>(`/api/me/connections/${from}/repos?page=${page}`, { cookie: cookieHeader });
+      if (r.ok) {
+        repos = r.data ?? [];
+      } else {
+        reposError = r.error || 'failed to load repos';
+      }
+    }
+  }
+
+  return {
+    workspace: wsResult.data,
+    connectedProviders,
+    activeProvider,
+    repos,
+    reposError,
+    page
+  };
 };
 
 export const actions: Actions = {

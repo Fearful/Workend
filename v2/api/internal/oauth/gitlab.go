@@ -130,6 +130,64 @@ func (g *GitLab) FetchHandle(ctx context.Context, accessToken string) (string, e
 	return u.Username, nil
 }
 
+func (g *GitLab) ListRepos(ctx context.Context, accessToken string, page, perPage int) ([]Repo, error) {
+	if perPage < 1 || perPage > 100 {
+		perPage = 50
+	}
+	if page < 1 {
+		page = 1
+	}
+	q := url.Values{}
+	q.Set("per_page", fmt.Sprintf("%d", perPage))
+	q.Set("page", fmt.Sprintf("%d", page))
+	q.Set("membership", "true")
+	q.Set("simple", "true")
+	q.Set("order_by", "last_activity_at")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.instanceURL+"/api/v4/projects?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("gitlab /projects status %d: %s", resp.StatusCode, string(raw))
+	}
+	var rows []struct {
+		Name              string `json:"name"`
+		PathWithNamespace string `json:"path_with_namespace"`
+		Description       string `json:"description"`
+		Visibility        string `json:"visibility"`
+		WebURL            string `json:"web_url"`
+		HTTPURLToRepo     string `json:"http_url_to_repo"`
+		DefaultBranch     string `json:"default_branch"`
+		LastActivityAt    string `json:"last_activity_at"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		return nil, err
+	}
+	out := make([]Repo, 0, len(rows))
+	for _, r := range rows {
+		var ts *time.Time
+		if r.LastActivityAt != "" {
+			if t, err := time.Parse(time.RFC3339, r.LastActivityAt); err == nil {
+				ts = &t
+			}
+		}
+		out = append(out, Repo{
+			Name: r.Name, FullName: r.PathWithNamespace, Description: r.Description,
+			Private: r.Visibility != "public", HTMLURL: r.WebURL, CloneURL: r.HTTPURLToRepo,
+			DefaultBranch: r.DefaultBranch, UpdatedAt: ts,
+		})
+	}
+	return out, nil
+}
+
 // InjectCloneAuth: https://oauth2:<token>@host/path
 func (g *GitLab) InjectCloneAuth(rawURL, accessToken string) string {
 	if !OwnsURL(g, rawURL) {

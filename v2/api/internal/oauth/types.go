@@ -52,6 +52,10 @@ type Provider interface {
 	// whatever shape this provider expects. Returns the URL unchanged if
 	// it isn't an HTTP(S) URL on this provider's host.
 	InjectCloneAuth(rawURL, accessToken string) string
+
+	// ListRepos returns repos accessible to the authenticated user, sorted
+	// by recent activity. Page is 1-indexed; perPage capped per provider.
+	ListRepos(ctx context.Context, accessToken string, page, perPage int) ([]Repo, error)
 }
 
 // Token is what ExchangeCode and RefreshAccess return.
@@ -60,6 +64,19 @@ type Token struct {
 	Refresh   string     // empty if provider doesn't support refresh
 	ExpiresAt *time.Time // nil if token doesn't expire
 	Scopes    string     // raw scope string from provider
+}
+
+// Repo is the normalized cross-provider repo summary returned from
+// Provider.ListRepos. Mapped from GitHub/GitLab/Gitea response shapes.
+type Repo struct {
+	Name          string     `json:"name"`           // e.g. "kit"
+	FullName      string     `json:"full_name"`      // e.g. "sveltejs/kit"
+	Description   string     `json:"description"`
+	Private       bool       `json:"private"`
+	HTMLURL       string     `json:"html_url"`       // browser link
+	CloneURL      string     `json:"clone_url"`      // https URL for git clone
+	DefaultBranch string     `json:"default_branch"`
+	UpdatedAt     *time.Time `json:"updated_at"`
 }
 
 // OwnsURL is a default implementation: equality match on URL host.

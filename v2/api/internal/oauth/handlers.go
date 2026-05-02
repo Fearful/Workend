@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -150,6 +151,32 @@ func (h *Handlers) ListConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// GET /api/me/connections/{provider}/repos?page=N&per_page=M
+func (h *Handlers) ListRepos(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	providerID := chi.URLParam(r, "provider")
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+
+	repos, err := h.Registry.ListReposForUser(r.Context(), uid, providerID, page, perPage)
+	if err != nil {
+		switch err {
+		case ErrUnknownProvider:
+			http.Error(w, "unknown provider", http.StatusNotFound)
+		case ErrConnectionNotFound:
+			http.Error(w, "not connected", http.StatusNotFound)
+		default:
+			http.Error(w, err.Error(), http.StatusBadGateway)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(repos)
 }
 
 // DELETE /api/me/connections/{id}

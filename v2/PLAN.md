@@ -475,18 +475,17 @@ A provider is enabled only if its `_CLIENT_ID` and `_CLIENT_SECRET` are set. Wor
 
 ---
 
-## Stage 16 — Repo browser & token refresh (post-Stage 15)
+## Stage 16 — Repo browser & token refresh (DONE)
 
-**Goal:** When adding a project, pick from a list of repos in any connected provider instead of typing the URL.
+**Shipped:**
+- `Provider.ListRepos(ctx, accessToken, page, perPage) ([]Repo, error)` added to the interface; per-provider implementations map github/gitlab/gitea response shapes onto a normalized `Repo` struct (name, full_name, description, private, html_url, clone_url, default_branch, updated_at)
+- `Registry.ListReposForUser` reuses `accessTokenForProvider` so lazy-refresh applies here too
+- `GET /api/me/connections/{provider}/repos?page=N` endpoint
+- Add-project page split into a two-column layout: form on the left, picker on the right with provider tabs and a clickable repo list. Click fills name + clone_url + default_branch in the form.
 
-**Definition of done**
-- `GET /api/me/connections/:provider/repos` returns a paginated list of repos via the provider's repo-list endpoint
-- "Add project from connection" UI: select provider → list repos → click → fills `git_url` and `name` automatically
-- Token refresh middleware actually exercised (Stage 15 lays the groundwork; this stage is when refresh failures become user-visible)
-
-**Out of scope**
-- Filtering/searching across repos (basic list is enough)
-- Webhook setup from the repo browser (Stage 18)
+**Still deferred:**
+- Filtering/searching across repos (visible-pages-only for now)
+- Lazy-on-401-response refresh (current path is lazy-on-expiry)
 
 ---
 

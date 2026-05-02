@@ -200,6 +200,23 @@ func (r *Registry) AccessTokenForCloneURL(ctx context.Context, userID uuid.UUID,
 	return access
 }
 
+// ListReposForUser returns a page of repos for a (user, provider) connection.
+// Lazy-refreshes the access token if it's expired.
+func (r *Registry) ListReposForUser(ctx context.Context, userID uuid.UUID, providerID string, page, perPage int) ([]Repo, error) {
+	p, ok := r.ByID(providerID)
+	if !ok {
+		return nil, ErrUnknownProvider
+	}
+	access, _, err := r.accessTokenForProvider(ctx, userID, p)
+	if err != nil {
+		return nil, err
+	}
+	if access == "" {
+		return nil, ErrConnectionNotFound
+	}
+	return p.ListRepos(ctx, access, page, perPage)
+}
+
 // accessTokenForProvider is the workhorse: load encrypted token from DB,
 // decrypt, refresh if expired, return access string.
 func (r *Registry) accessTokenForProvider(ctx context.Context, userID uuid.UUID, p Provider) (access string, expiresAt *time.Time, err error) {
