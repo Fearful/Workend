@@ -10,6 +10,7 @@ import (
 )
 
 // builtinDetectors are the always-on detectors compiled in to the binary.
+// The Dagger detector needs a wdagger.Client; it's added via InitDetectors.
 func builtinDetectors() []Detector {
 	return []Detector{
 		NPM{},

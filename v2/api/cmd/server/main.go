@@ -58,8 +58,12 @@ func main() {
 		logger.Error("custom detectors load failed", "err", err)
 		os.Exit(1)
 	}
+	// Always-on Dagger detector (needs the client; added here rather than
+	// in the static builtin list).
+	extras := []detect.Detector{detect.Dagger{Dagger: dc}}
+	extras = append(extras, customDetectors...)
+	detect.InitDetectors(extras)
 	if len(customDetectors) > 0 {
-		detect.InitDetectors(customDetectors)
 		names := make([]string, 0, len(customDetectors))
 		for _, d := range customDetectors {
 			names = append(names, d.Name())

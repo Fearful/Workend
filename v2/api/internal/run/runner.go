@@ -84,6 +84,8 @@ func baseImage(source string) string {
 		return "node:22-alpine"
 	case "just":
 		return "alpine:3.20"
+	case "dagger":
+		return "registry.dagger.io/cli:v0.13.7"
 	default:
 		return "alpine:3.20"
 	}
