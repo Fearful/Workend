@@ -1,10 +1,92 @@
 # Workend v2 — Docker Compose
 #
-# Filled in during Stage 1. This is a placeholder so the file path is reserved
-# and tooling that searches for compose.yaml finds the canonical location.
+# Stage 1: walking skeleton. Four services up, /healthz green from web.
 #
-# See v2/PLAN.md Stage 1 for what goes here:
-#   - web (SvelteKit)
-#   - api (Go)
-#   - db (Postgres 16)
-#   - dagger-engine
+# Run:   docker compose up --build
+# Then:  open http://localhost:3000
+#
+# All non-engine containers run as non-root (uid 10001).
+# The Dagger engine requires privileged mode (BuildKit limitation);
+# it is the only privileged component and is reachable only via its
+# socket on a private named volume.
+
+name: workend
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: workend
+      POSTGRES_PASSWORD: workend
+      POSTGRES_DB: workend
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workend -d workend"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    expose:
+      - "5432"
+
+  dagger-engine:
+    image: registry.dagger.io/engine:v0.13.7
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - dagger-engine-state:/var/lib/dagger
+      - dagger-sock:/run/dagger
+    command:
+      - "--addr"
+      - "unix:///run/dagger/buildkitd.sock"
+      - "--addr"
+      - "tcp://0.0.0.0:1234"
+    expose:
+      - "1234"
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      dagger-engine:
+        condition: service_started
+    environment:
+      WORKEND_LISTEN_ADDR: ":8080"
+      WORKEND_DATABASE_URL: "postgres://workend:workend@db:5432/workend?sslmode=disable"
+      WORKEND_DAGGER_SOCK: "/run/dagger/buildkitd.sock"
+    volumes:
+      - dagger-sock:/run/dagger:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "8080"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      WORKEND_API_URL: "http://api:8080"
+      NODE_ENV: production
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "3000:3000"
+
+volumes:
+  db-data:
+  dagger-engine-state:
+  dagger-sock:
