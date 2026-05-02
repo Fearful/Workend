@@ -317,7 +317,10 @@
 
 {#if data.runs.length > 0}
   <section class="panel">
-    <h2>Recent runs</h2>
+    <h2 style="display:flex; align-items:center; justify-content:space-between;">
+      <span>Recent runs</span>
+      <a href={`/projects/${data.project.id}/runs`} style="font-size:0.75rem; text-transform:none; letter-spacing:0; color:#60a5fa; font-weight:400;">View all →</a>
+    </h2>
     {#each data.runs.slice(0, 10) as r (r.id)}
       <a href={`/runs/${r.id}`} class="run-row">
         <span class="dot" style="background: {statusColor(r.status)}"></span>

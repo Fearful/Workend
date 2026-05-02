@@ -288,6 +288,10 @@
       <button type="button" class="danger" disabled={cancelling} onclick={cancel}>
         {cancelling ? 'Cancelling…' : 'Cancel'}
       </button>
+    {:else}
+      <form method="POST" action="?/rerun" style="margin: 0;">
+        <button type="submit">Re-run</button>
+      </form>
     {/if}
   </div>
 </div>

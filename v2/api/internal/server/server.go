@@ -80,6 +80,7 @@ func (s *Server) Router() http.Handler {
 
 			r.Get("/projects/{project_id}/tasks", taskH.ListByProject)
 			r.Get("/projects/{project_id}/runs", runH.ListByProject)
+			r.Get("/me/runs", runH.ListForUser)
 
 			r.Post("/tasks/{id}/runs", runH.Create)
 			r.Get("/runs/{id}", runH.Get)

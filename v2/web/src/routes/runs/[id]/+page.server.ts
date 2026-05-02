@@ -1,5 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+import type { PageServerLoad, Actions } from './$types';
 import { apiFetch } from '$lib/api';
 
 const SESSION_COOKIE = 'workend_session';
@@ -49,4 +49,24 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   }
 
   return { run: runResult.data, log };
+};
+
+export const actions: Actions = {
+  rerun: async ({ params, cookies }) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
+
+    // Look up the original run to get its task_id, then start a new run
+    // against that task. Note: this re-runs at *current* repo HEAD, not
+    // the original commit — see PLAN.md Stage 7 (deferred follow-up).
+    const original = await apiFetch<Run>(`/api/runs/${params.id}`, { cookie: cookieHeader });
+    if (!original.ok || !original.data) throw error(500, 'failed to load original run');
+
+    const newRun = await apiFetch<{ id: string }>(`/api/tasks/${original.data.task_id}/runs`, {
+      method: 'POST',
+      cookie: cookieHeader
+    });
+    if (!newRun.ok || !newRun.data) throw error(newRun.status, newRun.error || 'rerun failed');
+    throw redirect(303, `/runs/${newRun.data.id}`);
+  }
 };

@@ -440,6 +440,7 @@ func (h *Handlers) GetLog(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListByProject returns runs for a project, most recent first.
+// Optional ?status=<succeeded|failed|cancelled|running|queued> filters.
 // GET /api/projects/:project_id/runs
 func (h *Handlers) ListByProject(w http.ResponseWriter, r *http.Request) {
 	uid := auth.UserID(r.Context())
@@ -454,17 +455,26 @@ func (h *Handlers) ListByProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.Pool.Query(r.Context(), `
+	statusFilter := r.URL.Query().Get("status")
+	args := []any{pid}
+	whereStatus := ""
+	if statusFilter != "" && validStatus(statusFilter) {
+		args = append(args, statusFilter)
+		whereStatus = " AND r.status = $2"
+	}
+
+	q := `
 		SELECT r.id, r.task_id, r.project_id, r.commit_sha, r.status,
 		       r.started_at, r.finished_at, r.exit_code, r.log_path,
 		       r.created_at, r.updated_at,
 		       t.name, t.source
 		FROM runs r
 		JOIN tasks t ON t.id = r.task_id
-		WHERE r.project_id = $1
+		WHERE r.project_id = $1` + whereStatus + `
 		ORDER BY r.created_at DESC
 		LIMIT 200
-	`, pid)
+	`
+	rows, err := h.Pool.Query(r.Context(), q, args...)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -485,6 +495,63 @@ func (h *Handlers) ListByProject(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// ListForUser returns the most recent runs across every project the user
+// owns. Used by the dashboard.
+// GET /api/me/runs?limit=N
+func (h *Handlers) ListForUser(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	limit := 25
+	rows, err := h.Pool.Query(r.Context(), `
+		SELECT r.id, r.task_id, r.project_id, r.commit_sha, r.status,
+		       r.started_at, r.finished_at, r.exit_code, r.log_path,
+		       r.created_at, r.updated_at,
+		       t.name, t.source,
+		       p.name AS project_name, w.name AS workspace_name
+		FROM runs r
+		JOIN tasks t      ON t.id = r.task_id
+		JOIN projects p   ON p.id = r.project_id
+		JOIN workspaces w ON w.id = p.workspace_id
+		WHERE w.user_id = $1
+		ORDER BY r.created_at DESC
+		LIMIT $2
+	`, uid, limit)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type dashRun struct {
+		Run
+		ProjectName   string `json:"project_name"`
+		WorkspaceName string `json:"workspace_name"`
+	}
+
+	out := []dashRun{}
+	for rows.Next() {
+		var dr dashRun
+		if err := rows.Scan(&dr.ID, &dr.TaskID, &dr.ProjectID, &dr.CommitSHA, &dr.Status,
+			&dr.StartedAt, &dr.FinishedAt, &dr.ExitCode, &dr.LogPath,
+			&dr.CreatedAt, &dr.UpdatedAt,
+			&dr.TaskName, &dr.TaskSource,
+			&dr.ProjectName, &dr.WorkspaceName); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		out = append(out, dr)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+func validStatus(s string) bool {
+	switch s {
+	case StatusQueued, StatusRunning, StatusSucceeded, StatusFailed, StatusCancelled:
+		return true
+	}
+	return false
 }
 
 // --- helpers ---
