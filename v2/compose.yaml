@@ -61,6 +61,12 @@ services:
       WORKEND_DAGGER_SOCK: "/run/dagger/buildkitd.sock"
       WORKEND_REPOS_ROOT: "/repos"
       WORKEND_LOGS_ROOT: "/var/lib/workend/logs"
+      # GitHub OAuth (optional). If set, also set WORKEND_TOKEN_KEY (32 bytes
+      # base64) for at-rest encryption of stored tokens.
+      WORKEND_GITHUB_CLIENT_ID: "${WORKEND_GITHUB_CLIENT_ID:-}"
+      WORKEND_GITHUB_CLIENT_SECRET: "${WORKEND_GITHUB_CLIENT_SECRET:-}"
+      WORKEND_GITHUB_REDIRECT_URL: "${WORKEND_GITHUB_REDIRECT_URL:-http://localhost:3000/auth/github/callback}"
+      WORKEND_TOKEN_KEY: "${WORKEND_TOKEN_KEY:-}"
       _EXPERIMENTAL_DAGGER_RUNNER_HOST: "tcp://dagger-engine:1234"
     volumes:
       - dagger-sock:/run/dagger:ro

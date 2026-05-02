@@ -12,6 +12,8 @@ import (
 	"workend/api/internal/config"
 	wdagger "workend/api/internal/dagger"
 	"workend/api/internal/db"
+	"workend/api/internal/oauth"
+	"workend/api/internal/secret"
 	"workend/api/internal/server"
 )
 
@@ -50,7 +52,30 @@ func main() {
 		}
 	}()
 
-	srv := server.New(cfg, pool, dc, logger)
+	var gh *oauth.GitHub
+	if cfg.GitHubClientID != "" && cfg.GitHubClientSecret != "" {
+		if cfg.TokenKey == "" {
+			logger.Error("WORKEND_TOKEN_KEY required when GitHub OAuth is configured")
+			os.Exit(1)
+		}
+		box, err := secret.NewBox(cfg.TokenKey)
+		if err != nil {
+			logger.Error("token key invalid", "err", err)
+			os.Exit(1)
+		}
+		gh = &oauth.GitHub{
+			Pool:         pool,
+			Box:          box,
+			ClientID:     cfg.GitHubClientID,
+			ClientSecret: cfg.GitHubClientSecret,
+			RedirectURL:  cfg.GitHubRedirectURL,
+			Scopes:       []string{"repo", "read:user"},
+			Secure:       cfg.CookieSecure,
+		}
+		logger.Info("github oauth enabled")
+	}
+
+	srv := server.New(cfg, pool, dc, gh, logger)
 
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,

@@ -12,6 +12,7 @@ import (
 	"workend/api/internal/config"
 	wdagger "workend/api/internal/dagger"
 	"workend/api/internal/health"
+	"workend/api/internal/oauth"
 	"workend/api/internal/project"
 	"workend/api/internal/run"
 	"workend/api/internal/stats"
@@ -23,11 +24,12 @@ type Server struct {
 	cfg    *config.Config
 	pool   *pgxpool.Pool
 	dagger *wdagger.Client
+	github *oauth.GitHub
 	logger *slog.Logger
 }
 
-func New(cfg *config.Config, pool *pgxpool.Pool, dc *wdagger.Client, logger *slog.Logger) *Server {
-	return &Server{cfg: cfg, pool: pool, dagger: dc, logger: logger}
+func New(cfg *config.Config, pool *pgxpool.Pool, dc *wdagger.Client, gh *oauth.GitHub, logger *slog.Logger) *Server {
+	return &Server{cfg: cfg, pool: pool, dagger: dc, github: gh, logger: logger}
 }
 
 func (s *Server) Router() http.Handler {
@@ -47,6 +49,7 @@ func (s *Server) Router() http.Handler {
 	projH := &project.Handlers{
 		Pool:      s.pool,
 		Dagger:    s.dagger,
+		GitHub:    s.github,
 		ReposRoot: s.cfg.ReposRoot,
 		Logger:    s.logger,
 	}
@@ -68,6 +71,13 @@ func (s *Server) Router() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireUser(s.pool))
 			r.Get("/me", authH.Me)
+
+			if s.github != nil {
+				r.Post("/auth/github/start", s.github.HandleStart)
+				r.Get("/auth/github/callback", s.github.HandleCallback)
+				r.Get("/me/github", s.github.HandleStatus)
+				r.Delete("/me/github", s.github.HandleDisconnect)
+			}
 
 			r.Get("/workspaces", wsH.List)
 			r.Post("/workspaces", wsH.Create)

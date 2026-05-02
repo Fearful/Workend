@@ -20,13 +20,21 @@ type CloneResult struct {
 // Clone fetches `gitURL` at `branch` (or HEAD if empty) and exports the tree
 // to `destPath` on the API container's filesystem. Then runs git log inside
 // an alpine/git container against the cloned tree to extract commit metadata.
-func Clone(ctx context.Context, dc *wdagger.Client, gitURL, branch, destPath string) (*CloneResult, error) {
+//
+// If `authToken` is non-empty, it's embedded into the URL as
+// https://x-access-token:<token>@host/path so private repos work.
+func Clone(ctx context.Context, dc *wdagger.Client, gitURL, branch, authToken, destPath string) (*CloneResult, error) {
 	client, err := dc.Get(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	gitRepo := client.Git(gitURL)
+	cloneURL := gitURL
+	if authToken != "" {
+		cloneURL = injectAuth(gitURL, authToken)
+	}
+
+	gitRepo := client.Git(cloneURL)
 
 	var ref *commitRef
 	if branch != "" {
@@ -95,4 +103,17 @@ func parseGitLog(out string) (author, message string) {
 		return "", out
 	}
 	return parts[0], parts[1]
+}
+
+// injectAuth turns "https://github.com/foo/bar.git" into
+// "https://x-access-token:<token>@github.com/foo/bar.git". A simple,
+// well-supported way to authenticate HTTPS git clones without needing
+// Dagger Secret bindings.
+func injectAuth(rawURL, token string) string {
+	for _, scheme := range []string{"https://", "http://"} {
+		if strings.HasPrefix(rawURL, scheme) {
+			return scheme + "x-access-token:" + token + "@" + strings.TrimPrefix(rawURL, scheme)
+		}
+	}
+	return rawURL
 }

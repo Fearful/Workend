@@ -3,6 +3,7 @@ module workend/api
 go 1.25.7
 
 require (
+	dagger.io/dagger v0.13.7
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
@@ -11,7 +12,6 @@ require (
 )
 
 require (
-	dagger.io/dagger v0.13.7 // indirect
 	github.com/99designs/gqlgen v0.17.55 // indirect
 	github.com/Khan/genqlient v0.7.0 // indirect
 	github.com/adrg/xdg v0.5.1 // indirect

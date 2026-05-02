@@ -111,16 +111,13 @@
     font-size: 0.875rem;
   }
 
-  .user-name {
-    color: #9ca3af;
-  }
 </style>
 
 <header>
   <a href="/" class="brand">Workend <small>v0.0.1</small></a>
   <nav>
     {#if data.user}
-      <span class="user-name">{data.user.display_name}</span>
+      <a href="/settings">{data.user.display_name}</a>
       <form method="POST" action="/logout" style="margin: 0;">
         <button type="submit" class="ghost">Log out</button>
       </form>

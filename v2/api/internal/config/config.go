@@ -12,6 +12,11 @@ type Config struct {
 	ReposRoot      string
 	LogsRoot       string
 	CookieSecure   bool
+
+	TokenKey           string // base64 32-byte key for at-rest encryption
+	GitHubClientID     string
+	GitHubClientSecret string
+	GitHubRedirectURL  string
 }
 
 func Load() (*Config, error) {
@@ -22,6 +27,11 @@ func Load() (*Config, error) {
 		ReposRoot:      getEnv("WORKEND_REPOS_ROOT", "/repos"),
 		LogsRoot:       getEnv("WORKEND_LOGS_ROOT", "/var/lib/workend/logs"),
 		CookieSecure:   getEnv("WORKEND_COOKIE_SECURE", "false") == "true",
+
+		TokenKey:           os.Getenv("WORKEND_TOKEN_KEY"),
+		GitHubClientID:     os.Getenv("WORKEND_GITHUB_CLIENT_ID"),
+		GitHubClientSecret: os.Getenv("WORKEND_GITHUB_CLIENT_SECRET"),
+		GitHubRedirectURL:  getEnv("WORKEND_GITHUB_REDIRECT_URL", "http://localhost:3000/auth/github/callback"),
 	}
 
 	if cfg.DatabaseURL == "" {

@@ -22,6 +22,7 @@ import (
 	"workend/api/internal/auth"
 	wdagger "workend/api/internal/dagger"
 	"workend/api/internal/detect"
+	"workend/api/internal/oauth"
 	"workend/api/internal/repo"
 	"workend/api/internal/stats"
 )
@@ -52,6 +53,7 @@ type Project struct {
 type Handlers struct {
 	Pool      *pgxpool.Pool
 	Dagger    *wdagger.Client
+	GitHub    *oauth.GitHub // optional; nil if OAuth not configured
 	ReposRoot string
 	Logger    *slog.Logger
 }
@@ -175,7 +177,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go h.cloneAsync(p.ID, wsID, req.GitURL, req.Branch)
+	go h.cloneAsync(uid, p.ID, wsID, req.GitURL, req.Branch)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -207,7 +209,7 @@ func (h *Handlers) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go h.cloneAsync(pid, p.WorkspaceID, p.GitURL, branch)
+	go h.cloneAsync(uid, pid, p.WorkspaceID, p.GitURL, branch)
 
 	w.WriteHeader(http.StatusAccepted)
 }
@@ -273,11 +275,13 @@ func (h *Handlers) fetchOwned(ctx context.Context, uid, pid uuid.UUID) (*Project
 	return &p, nil
 }
 
-func (h *Handlers) cloneAsync(projectID, workspaceID uuid.UUID, gitURL, branch string) {
+func (h *Handlers) cloneAsync(userID, projectID, workspaceID uuid.UUID, gitURL, branch string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	dest := filepath.Join(h.ReposRoot, workspaceID.String(), projectID.String())
+
+	authToken := h.lookupAuth(ctx, userID, gitURL)
 
 	if _, err := h.Pool.Exec(ctx,
 		`UPDATE projects SET status = $1, updated_at = now() WHERE id = $2`,
@@ -296,7 +300,7 @@ func (h *Handlers) cloneAsync(projectID, workspaceID uuid.UUID, gitURL, branch s
 		return
 	}
 
-	result, err := repo.Clone(ctx, h.Dagger, gitURL, branch, dest)
+	result, err := repo.Clone(ctx, h.Dagger, gitURL, branch, authToken, dest)
 	if err != nil {
 		h.markError(projectID, err)
 		return
@@ -328,6 +332,22 @@ func (h *Handlers) cloneAsync(projectID, workspaceID uuid.UUID, gitURL, branch s
 	}
 
 	stats.Run(ctx, h.Dagger, h.Pool, h.Logger, projectID, result.LocalPath)
+}
+
+// lookupAuth returns a stored OAuth token if the URL points at a provider
+// the user has connected. Empty string means "no auth" (public clone path).
+func (h *Handlers) lookupAuth(ctx context.Context, userID uuid.UUID, gitURL string) string {
+	if h.GitHub == nil {
+		return ""
+	}
+	if !strings.Contains(gitURL, "github.com") {
+		return ""
+	}
+	tok, err := h.GitHub.Token(ctx, userID.String())
+	if err != nil {
+		return ""
+	}
+	return tok
 }
 
 func (h *Handlers) markError(projectID uuid.UUID, err error) {
