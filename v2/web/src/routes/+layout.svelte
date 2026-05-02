@@ -117,6 +117,9 @@
   <a href="/" class="brand">Workend <small>v0.0.1</small></a>
   <nav>
     {#if data.user}
+      {#if data.user.is_admin}
+        <a href="/admin">Admin</a>
+      {/if}
       <a href="/settings">{data.user.display_name}</a>
       <form method="POST" action="/logout" style="margin: 0;">
         <button type="submit" class="ghost">Log out</button>

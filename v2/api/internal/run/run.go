@@ -18,9 +18,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"workend/api/internal/audit"
 	"workend/api/internal/auth"
 	wdagger "workend/api/internal/dagger"
 )
+
+// MaxConcurrentRunsPerUser caps active (queued|running) runs per user.
+// Configurable later; hard-coded for Stage 10.
+const MaxConcurrentRunsPerUser = 3
 
 const (
 	StatusQueued    = "queued"
@@ -53,6 +58,7 @@ type Handlers struct {
 	Dagger   *wdagger.Client
 	LogsRoot string
 	Logger   *slog.Logger
+	Audit    *audit.Logger
 
 	mu         sync.Mutex
 	running    map[uuid.UUID]uuid.UUID            // task_id -> run_id
@@ -102,6 +108,18 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Concurrent-run limit per user (active runs across all tasks).
+	var activeForUser int
+	if err := h.Pool.QueryRow(r.Context(), `
+		SELECT COUNT(*) FROM runs r
+		JOIN projects p   ON p.id = r.project_id
+		JOIN workspaces w ON w.id = p.workspace_id
+		WHERE w.user_id = $1 AND r.status IN ('queued', 'running')
+	`, uid).Scan(&activeForUser); err == nil && activeForUser >= MaxConcurrentRunsPerUser {
+		http.Error(w, "concurrent run limit reached", http.StatusTooManyRequests)
+		return
+	}
+
 	h.mu.Lock()
 	if _, busy := h.running[taskID]; busy {
 		h.mu.Unlock()
@@ -131,6 +149,11 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	h.running[taskID] = runID
 	h.mu.Unlock()
+
+	if h.Audit != nil {
+		h.Audit.Record(r.Context(), uid, audit.RunStart, "run", runID.String(), r.RemoteAddr,
+			map[string]any{"task_id": taskID.String(), "task_name": spec.Name, "task_source": spec.Source})
+	}
 
 	go h.executeAsync(taskID, runID, spec)
 
@@ -239,6 +262,9 @@ func (h *Handlers) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cancelFn()
+	if h.Audit != nil {
+		h.Audit.Record(r.Context(), uid, audit.RunCancel, "run", runID.String(), r.RemoteAddr, nil)
+	}
 	w.WriteHeader(http.StatusAccepted)
 }
 

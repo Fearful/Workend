@@ -9,11 +9,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"workend/api/internal/audit"
 )
 
 type Handlers struct {
 	Pool   *pgxpool.Pool
 	Secure bool // set HTTPS-only cookie
+	Audit  *audit.Logger
 }
 
 type signupReq struct {
@@ -79,6 +82,10 @@ func (h *Handlers) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.Audit != nil {
+		h.Audit.Record(r.Context(), id, audit.UserSignup, "user", id.String(), r.RemoteAddr, nil)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(meResp{ID: id, Email: req.Email, DisplayName: req.DisplayName})
@@ -123,6 +130,10 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.Audit != nil {
+		h.Audit.Record(r.Context(), id, audit.UserLogin, "user", id.String(), r.RemoteAddr, nil)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(meResp{ID: id, Email: req.Email, DisplayName: displayName, IsAdmin: isAdmin})
 }
@@ -130,6 +141,10 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(SessionCookieName)
 	if err == nil {
+		// Capture the user before deletion to log it.
+		if sess, lookupErr := LookupSession(r.Context(), h.Pool, cookie.Value); lookupErr == nil && h.Audit != nil {
+			h.Audit.Record(r.Context(), sess.UserID, audit.UserLogout, "user", sess.UserID.String(), r.RemoteAddr, nil)
+		}
 		_ = DeleteSession(r.Context(), h.Pool, cookie.Value)
 	}
 	http.SetCookie(w, &http.Cookie{

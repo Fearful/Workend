@@ -8,6 +8,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"workend/api/internal/admin"
+	"workend/api/internal/audit"
 	"workend/api/internal/auth"
 	"workend/api/internal/config"
 	wdagger "workend/api/internal/dagger"
@@ -44,8 +46,10 @@ func (s *Server) Router() http.Handler {
 		DaggerSockPath: s.cfg.DaggerSockPath,
 	})
 
-	authH := &auth.Handlers{Pool: s.pool, Secure: s.cfg.CookieSecure}
+	auditLog := &audit.Logger{Pool: s.pool, Log: s.logger}
+	authH := &auth.Handlers{Pool: s.pool, Secure: s.cfg.CookieSecure, Audit: auditLog}
 	wsH := &workspace.Handlers{Pool: s.pool}
+	adminH := &admin.Handlers{Pool: s.pool, Audit: auditLog}
 	projH := &project.Handlers{
 		Pool:      s.pool,
 		Dagger:    s.dagger,
@@ -60,6 +64,7 @@ func (s *Server) Router() http.Handler {
 		Dagger:   s.dagger,
 		LogsRoot: s.cfg.LogsRoot,
 		Logger:   s.logger,
+		Audit:    auditLog,
 	}
 	runH.Init()
 
@@ -100,6 +105,12 @@ func (s *Server) Router() http.Handler {
 			r.Get("/runs/{id}/log", runH.GetLog)
 			r.Get("/runs/{id}/log/stream", runH.Stream)
 			r.Post("/runs/{id}/cancel", runH.Cancel)
+
+			r.Group(func(r chi.Router) {
+				r.Use(admin.RequireAdmin(s.pool))
+				r.Get("/admin/users", adminH.ListUsers)
+				r.Get("/admin/audit-log", adminH.AuditLog)
+			})
 		})
 	})
 
