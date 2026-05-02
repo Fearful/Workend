@@ -18,6 +18,7 @@ interface Project {
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
+  webhook_token?: string;
 }
 
 interface Workspace {

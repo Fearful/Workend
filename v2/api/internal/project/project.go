@@ -48,6 +48,9 @@ type Project struct {
 	LastSyncedAt      *time.Time `json:"last_synced_at"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
+	// Stage 19: only populated by Get (single-project), not List, to avoid
+	// surfacing tokens in bulk responses.
+	WebhookToken string `json:"webhook_token,omitempty"`
 }
 
 type Handlers struct {
@@ -159,15 +162,15 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	var p Project
 	err = h.Pool.QueryRow(r.Context(), `
-		INSERT INTO projects (workspace_id, name, git_url, default_branch, status)
-		VALUES ($1, $2, $3, NULLIF($4, ''), $5)
+		INSERT INTO projects (workspace_id, name, git_url, default_branch, status, webhook_token)
+		VALUES ($1, $2, $3, NULLIF($4, ''), $5, encode(gen_random_bytes(24), 'base64'))
 		RETURNING id, workspace_id, name, git_url, default_branch, local_path,
 		          status, last_commit_sha, last_commit_message, last_commit_author,
-		          last_synced_at, created_at, updated_at
+		          last_synced_at, created_at, updated_at, webhook_token
 	`, wsID, req.Name, req.GitURL, req.Branch, StatusPending).
 		Scan(&p.ID, &p.WorkspaceID, &p.Name, &p.GitURL, &p.DefaultBranch, &p.LocalPath,
 			&p.Status, &p.LastCommitSHA, &p.LastCommitMessage, &p.LastCommitAuthor,
-			&p.LastSyncedAt, &p.CreatedAt, &p.UpdatedAt)
+			&p.LastSyncedAt, &p.CreatedAt, &p.UpdatedAt, &p.WebhookToken)
 	if err != nil {
 		if strings.Contains(err.Error(), "projects_workspace_name_idx") {
 			http.Error(w, "project name already used in this workspace", http.StatusConflict)
@@ -264,18 +267,69 @@ func (h *Handlers) fetchOwned(ctx context.Context, uid, pid uuid.UUID) (*Project
 	err := h.Pool.QueryRow(ctx, `
 		SELECT p.id, p.workspace_id, p.name, p.git_url, p.default_branch, p.local_path,
 		       p.status, p.last_commit_sha, p.last_commit_message, p.last_commit_author,
-		       p.last_synced_at, p.created_at, p.updated_at
+		       p.last_synced_at, p.created_at, p.updated_at, p.webhook_token
 		FROM projects p
 		JOIN workspaces w ON w.id = p.workspace_id
 		JOIN workspace_members m ON m.workspace_id = w.id
 		WHERE p.id = $1 AND m.user_id = $2
 	`, pid, uid).Scan(&p.ID, &p.WorkspaceID, &p.Name, &p.GitURL, &p.DefaultBranch, &p.LocalPath,
 		&p.Status, &p.LastCommitSHA, &p.LastCommitMessage, &p.LastCommitAuthor,
-		&p.LastSyncedAt, &p.CreatedAt, &p.UpdatedAt)
+		&p.LastSyncedAt, &p.CreatedAt, &p.UpdatedAt, &p.WebhookToken)
 	if err != nil {
 		return nil, err
 	}
 	return &p, nil
+}
+
+// Webhook handles a public push event from a git provider. Authn is the
+// per-project token in the URL path. Body content is ignored — we just
+// trigger a sync (= clone the latest of the project's default branch).
+//
+// POST /api/webhooks/projects/{token}
+func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	if token == "" {
+		http.Error(w, "missing token", http.StatusBadRequest)
+		return
+	}
+
+	var (
+		projectID, workspaceID uuid.UUID
+		creatorID              uuid.UUID
+		gitURL                 string
+		defaultBranch          *string
+	)
+	err := h.Pool.QueryRow(r.Context(), `
+		SELECT p.id, p.workspace_id, w.user_id, p.git_url, p.default_branch
+		FROM projects p
+		JOIN workspaces w ON w.id = p.workspace_id
+		WHERE p.webhook_token = $1
+	`, token).Scan(&projectID, &workspaceID, &creatorID, &gitURL, &defaultBranch)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := h.Pool.Exec(r.Context(),
+		`UPDATE projects SET status = $1, updated_at = now() WHERE id = $2`,
+		StatusCloning, projectID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	branch := ""
+	if defaultBranch != nil {
+		branch = *defaultBranch
+	}
+	// Use the workspace creator's identity for token lookup (the closest
+	// proxy we have for "the user who set up this connection").
+	go h.cloneAsync(creatorID, projectID, workspaceID, gitURL, branch)
+
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (h *Handlers) cloneAsync(userID, projectID, workspaceID uuid.UUID, gitURL, branch string) {

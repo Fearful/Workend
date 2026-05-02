@@ -348,6 +348,15 @@
   <div class="row"><span class="label">Branch</span><span class="value">{data.project.default_branch || '—'}</span></div>
   <div class="row"><span class="label">Status</span><span class="value">{data.project.status}</span></div>
   <div class="row"><span class="label">Local path</span><span class="value">{data.project.local_path || '—'}</span></div>
+  {#if data.project.webhook_token}
+    <div class="row">
+      <span class="label">Webhook URL</span>
+      <span class="value" style="display:flex; align-items:center; gap:0.5rem;">
+        <code style="background:#0d0f12; padding:0.25rem 0.5rem; border-radius:4px; flex:1; overflow-x:auto;">{`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/projects/${data.project.webhook_token}`}</code>
+        <button type="button" class="ghost" onclick={() => navigator.clipboard?.writeText(`${window.location.origin}/api/webhooks/projects/${data.project.webhook_token}`)}>Copy</button>
+      </span>
+    </div>
+  {/if}
 </section>
 
 <section class="panel">

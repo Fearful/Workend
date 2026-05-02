@@ -103,6 +103,9 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/login", authH.Login)
 		r.Post("/auth/logout", authH.Logout)
 
+		// Public, token-authed: incoming webhooks from git providers.
+		r.Post("/webhooks/projects/{token}", projH.Webhook)
+
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireUser(s.pool))
 			r.Get("/me", authH.Me)
