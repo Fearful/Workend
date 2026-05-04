@@ -19,8 +19,34 @@
     "source": "taskfile",
     "manifest": "Taskfile.yml",
     "image": "alpine:3.20",
-    "setup": ["wget -qO- https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin"],
+    "setup": [
+      "wget -qO- https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin"
+    ],
     "detect_cmd": "task --list-all 2>/dev/null | tail -n +2 | awk '{print $1}' | sed 's/:$//'",
     "run_cmd_template": "task {{name}}"
+  },
+  {
+    "source": "npm",
+    "manifest": "package.json",
+    "image": "node:20-alpine",
+    "setup": ["apk add --no-cache jq"],
+    "detect_cmd": "jq -r '.scripts | keys[]' package.json",
+    "run_cmd_template": "npm run {{name}}"
+  },
+  {
+    "source": "pnpm",
+    "manifest": "package.json",
+    "image": "node:20-alpine",
+    "setup": ["apk add --no-cache jq", "npm install -g pnpm"],
+    "detect_cmd": "jq -r '.scripts | keys[]' package.json",
+    "run_cmd_template": "pnpm run {{name}}"
+  },
+  {
+    "source": "yarn",
+    "manifest": "package.json",
+    "image": "node:20-alpine",
+    "setup": ["apk add --no-cache jq", "npm install -g yarn"],
+    "detect_cmd": "jq -r '.scripts | keys[]' package.json",
+    "run_cmd_template": "yarn {{name}}"
   }
 ]

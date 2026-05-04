@@ -24,11 +24,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"workend/api/internal/auth"
+	"workend/api/internal/cidetect"
 	wdagger "workend/api/internal/dagger"
+	"workend/api/internal/deps"
 	"workend/api/internal/detect"
 	"workend/api/internal/oauth"
+	"workend/api/internal/patcred"
 	"workend/api/internal/quota"
 	"workend/api/internal/repo"
+	"workend/api/internal/secret"
+	"workend/api/internal/secscan"
+	"workend/api/internal/sshkey"
 	"workend/api/internal/stats"
 )
 
@@ -64,6 +70,7 @@ type Handlers struct {
 	Pool      *pgxpool.Pool
 	Dagger    *wdagger.Client
 	OAuth     *oauth.Registry // nil-safe; provider lookup returns no token when nil
+	Secret    *secret.Box     // nil-safe; required to decrypt user_ssh_keys rows
 	ReposRoot string
 	Logger    *slog.Logger
 }
@@ -162,8 +169,8 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name and git_url required", http.StatusBadRequest)
 		return
 	}
-	if !strings.HasPrefix(req.GitURL, "http://") && !strings.HasPrefix(req.GitURL, "https://") {
-		http.Error(w, "git_url must be http(s)", http.StatusBadRequest)
+	if !strings.HasPrefix(req.GitURL, "http://") && !strings.HasPrefix(req.GitURL, "https://") && !sshkey.IsSSHURL(req.GitURL) {
+		http.Error(w, "git_url must be http(s) or ssh", http.StatusBadRequest)
 		return
 	}
 
@@ -222,6 +229,230 @@ func (h *Handlers) Sync(w http.ResponseWriter, r *http.Request) {
 	go h.cloneAsync(uid, pid, p.WorkspaceID, p.GitURL, branch)
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// ListBranches enumerates branches available for the project's repo.
+// Prefers OAuth-provider API (richer metadata: protected, default flag); falls
+// back to `git ls-remote --heads` via Dagger when no OAuth connection covers
+// the URL.
+//
+// GET /api/projects/:id/branches
+func (h *Handlers) ListBranches(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	pid, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	p, err := h.fetchOwned(r.Context(), uid, pid)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	type out struct {
+		Source   string          `json:"source"` // "provider" | "ls-remote"
+		Branches []oauth.Branch  `json:"branches"`
+	}
+	resp := out{Source: "ls-remote", Branches: []oauth.Branch{}}
+
+	if h.OAuth != nil {
+		if branches, err := h.OAuth.ListBranchesForCloneURL(r.Context(), uid, p.GitURL); err == nil && branches != nil {
+			resp.Source = "provider"
+			resp.Branches = branches
+		}
+	}
+
+	if resp.Source == "ls-remote" {
+		token := h.lookupAuth(r.Context(), uid, p.GitURL)
+		raw, err := repo.LsRemoteBranches(r.Context(), h.Dagger, p.GitURL, token)
+		if err != nil {
+			http.Error(w, "list branches: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		current := ""
+		if p.DefaultBranch != nil {
+			current = *p.DefaultBranch
+		}
+		for _, b := range raw {
+			resp.Branches = append(resp.Branches, oauth.Branch{
+				Name:      b.Name,
+				CommitSHA: b.CommitSHA,
+				Default:   b.Name == current,
+			})
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// SwitchBranch updates the project's default_branch and re-syncs against
+// the new branch. Triggers a fresh clone in the background.
+//
+// POST /api/projects/:id/branch  body: {"name": "feature/x"}
+func (h *Handlers) SwitchBranch(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	pid, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	p, err := h.fetchOwned(r.Context(), uid, pid)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	body.Name = strings.TrimSpace(body.Name)
+	if body.Name == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.Pool.Exec(r.Context(), `
+		UPDATE projects SET default_branch = $1, status = $2, updated_at = now()
+		WHERE id = $3
+	`, body.Name, StatusCloning, pid); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	go h.cloneAsync(uid, pid, p.WorkspaceID, p.GitURL, body.Name)
+
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{"branch": body.Name})
+}
+
+// TriggerCI dispatches an upstream CI run for the project.
+//
+// POST /api/projects/:id/ci-trigger
+//   body: {"workflow": "ci.yml", "branch": "main", "inputs": {"k": "v"}}
+//
+// `workflow` is mandatory for GitHub/Gitea; ignored by GitLab (whose pipeline
+// is monolithic). `branch` defaults to the project's stored default branch.
+func (h *Handlers) TriggerCI(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	pid, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	p, err := h.fetchOwned(r.Context(), uid, pid)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if h.OAuth == nil {
+		http.Error(w, "no oauth providers configured", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Workflow string            `json:"workflow"`
+		Branch   string            `json:"branch"`
+		Inputs   map[string]string `json:"inputs"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	body.Workflow = strings.TrimSpace(body.Workflow)
+	body.Branch = strings.TrimSpace(body.Branch)
+	if body.Branch == "" && p.DefaultBranch != nil {
+		body.Branch = *p.DefaultBranch
+	}
+	if body.Branch == "" {
+		http.Error(w, "branch required", http.StatusBadRequest)
+		return
+	}
+
+	provider, ok := h.OAuth.ForCloneURL(p.GitURL)
+	if !ok {
+		http.Error(w, "no oauth provider for this URL", http.StatusBadRequest)
+		return
+	}
+	access := h.OAuth.AccessTokenForCloneURL(r.Context(), uid, p.GitURL)
+	if access == "" {
+		http.Error(w, "no oauth connection", http.StatusBadRequest)
+		return
+	}
+	fullName := oauth.RepoFullNameFromURL(p.GitURL)
+
+	res, err := provider.TriggerCIWorkflow(r.Context(), access, fullName, body.Workflow, body.Branch, body.Inputs)
+	if err != nil {
+		http.Error(w, "upstream dispatch failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+// CreatePullRequest opens a PR/MR on the upstream provider. Requires an
+// OAuth connection covering the project's git host.
+//
+// POST /api/projects/:id/pull-requests
+//   body: {"source": "...", "target": "...", "title": "...", "body": "..."}
+func (h *Handlers) CreatePullRequest(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	pid, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	p, err := h.fetchOwned(r.Context(), uid, pid)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if h.OAuth == nil {
+		http.Error(w, "no oauth providers configured", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Source string `json:"source"`
+		Target string `json:"target"`
+		Title  string `json:"title"`
+		Body   string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	body.Source = strings.TrimSpace(body.Source)
+	body.Target = strings.TrimSpace(body.Target)
+	body.Title = strings.TrimSpace(body.Title)
+	if body.Source == "" || body.Target == "" {
+		http.Error(w, "source and target required", http.StatusBadRequest)
+		return
+	}
+	if body.Source == body.Target {
+		http.Error(w, "source and target must differ", http.StatusBadRequest)
+		return
+	}
+	if body.Title == "" {
+		body.Title = fmt.Sprintf("Merge %s into %s", body.Source, body.Target)
+	}
+
+	res, err := h.OAuth.CreatePullRequestForCloneURL(r.Context(), uid, p.GitURL, oauth.PullRequestInput{
+		Source: body.Source, Target: body.Target,
+		Title: body.Title, Body: body.Body,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(res)
 }
 
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
@@ -434,6 +665,7 @@ func (h *Handlers) cloneAsync(userID, projectID, workspaceID uuid.UUID, gitURL, 
 	dest := filepath.Join(h.ReposRoot, workspaceID.String(), projectID.String())
 
 	authToken := h.lookupAuth(ctx, userID, gitURL)
+	sshKey := h.lookupSSHKey(ctx, userID, gitURL)
 
 	if _, err := h.Pool.Exec(ctx,
 		`UPDATE projects SET status = $1, updated_at = now() WHERE id = $2`,
@@ -452,7 +684,7 @@ func (h *Handlers) cloneAsync(userID, projectID, workspaceID uuid.UUID, gitURL, 
 		return
 	}
 
-	result, err := repo.Clone(ctx, h.Dagger, gitURL, branch, authToken, dest)
+	result, err := repo.Clone(ctx, h.Dagger, gitURL, branch, authToken, sshKey, dest)
 	if err != nil {
 		h.markError(projectID, err)
 		return
@@ -483,19 +715,52 @@ func (h *Handlers) cloneAsync(userID, projectID, workspaceID uuid.UUID, gitURL, 
 		h.Logger.Warn("task detection failed", "project", projectID, "err", err)
 	}
 
+	cidetect.PersistCIConfigs(ctx, h.Pool, h.Logger, projectID, result.LocalPath)
+
 	stats.Run(ctx, h.Dagger, h.Pool, h.Logger, projectID, result.LocalPath)
+
+	// Best-effort secret scan; runs in background so the user-visible sync
+	// duration isn't dominated by it on large repos.
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		if err := secscan.Scan(bgCtx, h.Dagger, h.Pool, projectID, result.LocalPath, result.LatestCommitSHA); err != nil {
+			h.Logger.Warn("secret scan failed", "project", projectID, "err", err)
+		}
+	}()
+
+	// Lockfile parse: cheap, runs synchronously so the dependencies tab
+	// is fresh when the user clicks through after a sync completes.
+	if err := deps.Parse(ctx, h.Pool, projectID, result.LocalPath); err != nil {
+		h.Logger.Warn("dep parse failed", "project", projectID, "err", err)
+	}
 }
 
-// lookupAuth returns a stored OAuth token if the URL points at a provider
-// the user has connected. Empty string means "no auth" (public clone path).
-//
-// Stage 15: routes via the multi-provider registry. Host-equality match
-// against each registered provider's instance host.
+// lookupAuth returns a stored token to inject into the HTTPS clone URL.
+// Tries OAuth first (admin-configured providers, host-equality match against
+// each registered provider's instance host); falls back to a user-managed
+// PAT credential keyed on the URL's host. Empty string means "no auth"
+// (public clone path).
 func (h *Handlers) lookupAuth(ctx context.Context, userID uuid.UUID, gitURL string) string {
-	if h.OAuth == nil {
-		return ""
+	if h.OAuth != nil {
+		if tok := h.OAuth.AccessTokenForCloneURL(ctx, userID, gitURL); tok != "" {
+			return tok
+		}
 	}
-	return h.OAuth.AccessTokenForCloneURL(ctx, userID, gitURL)
+	return patcred.LookupForCloneURL(ctx, h.Pool, h.Secret, userID, gitURL)
+}
+
+// lookupSSHKey returns the user's most-recent SSH key when gitURL looks
+// like a git+SSH URL. Returns nil otherwise (HTTPS path).
+func (h *Handlers) lookupSSHKey(ctx context.Context, userID uuid.UUID, gitURL string) *repo.SSHKey {
+	if !sshkey.IsSSHURL(gitURL) || h.Secret == nil {
+		return nil
+	}
+	priv, _, err := sshkey.LookupAnyKeyForUser(ctx, h.Pool, h.Secret, userID)
+	if err != nil || priv == "" {
+		return nil
+	}
+	return &repo.SSHKey{PrivateKey: priv}
 }
 
 func (h *Handlers) markError(projectID uuid.UUID, err error) {

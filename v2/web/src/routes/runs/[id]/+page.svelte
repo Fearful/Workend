@@ -1,63 +1,108 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { invalidateAll } from '$app/navigation';
+  import { formatRelative, shortSha as _shortSha, formatDuration } from '$lib/utils';
+  import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+  import Panel from '$lib/components/Panel.svelte';
+  import StatusPill from '$lib/components/StatusPill.svelte';
+  import Badge from '$lib/components/Badge.svelte';
+  import LogViewer from '$lib/components/LogViewer.svelte';
+  import TimeAgo from '$lib/components/TimeAgo.svelte';
+  import Tooltip from '$lib/components/Tooltip.svelte';
 
-  let { data } = $props();
+  let { data, form } = $props();
+  let commentDraft = $state('');
+  $effect(() => {
+    if (form?.commentDraft) commentDraft = form.commentDraft;
+  });
+
+  function bodyParts(body: string): { text: string; mention: boolean }[] {
+    const parts: { text: string; mention: boolean }[] = [];
+    const re = /@([A-Za-z0-9._-]+)/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body)) !== null) {
+      if (m.index > last) parts.push({ text: body.slice(last, m.index), mention: false });
+      parts.push({ text: m[0], mention: true });
+      last = m.index + m[0].length;
+    }
+    if (last < body.length) parts.push({ text: body.slice(last), mention: false });
+    return parts;
+  }
+
+  function shortSha(sha: string | null): string {
+    return _shortSha(sha, 12);
+  }
+
+  function formatBytes(b: number): string {
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+    return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  }
 
   let liveLog = $state('');
   let liveStatus = $state('queued');
   let liveExitCode = $state<number | null>(null);
-  let autoScroll = $state(true);
-  let logEl: HTMLPreElement | null = $state(null);
   let cancelling = $state(false);
   let initialized = false;
-
-  function statusColor(status: string): string {
-    switch (status) {
-      case 'succeeded':
-        return '#22c55e';
-      case 'queued':
-      case 'running':
-        return '#eab308';
-      case 'failed':
-        return '#ef4444';
-      case 'cancelled':
-        return '#6b7280';
-      default:
-        return '#6b7280';
-    }
-  }
-
-  function shortSha(sha: string | null): string {
-    return sha ? sha.slice(0, 12) : '—';
-  }
-
-  function formatDuration(start: string | null, end: string | null): string {
-    if (!start) return '—';
-    const startMs = new Date(start).getTime();
-    const endMs = end ? new Date(end).getTime() : Date.now();
-    const sec = Math.round((endMs - startMs) / 1000);
-    if (sec < 60) return `${sec}s`;
-    return `${Math.floor(sec / 60)}m ${sec % 60}s`;
-  }
 
   function isTerminal(status: string): boolean {
     return status === 'succeeded' || status === 'failed' || status === 'cancelled';
   }
 
+  function isPendingApproval(status: string): boolean {
+    return status === 'pending_approval';
+  }
+
   let es: EventSource | null = null;
+  let notifyOnComplete = $state(false);
+
+  function maybeFireDesktopNotification() {
+    if (!notifyOnComplete) return;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+    if (typeof document !== 'undefined' && !document.hidden) return;
+    const title = liveStatus === 'succeeded'
+      ? `${data.run.task_name} succeeded`
+      : `${data.run.task_name} ${liveStatus}`;
+    try {
+      new Notification(title, {
+        body: `${data.run.task_source} · exit ${liveExitCode ?? '?'}`,
+        tag: `workend-run-${data.run.id}`
+      });
+    } catch {
+      // noop
+    }
+  }
+
+  async function toggleNotify() {
+    if (typeof Notification === 'undefined') {
+      alert('This browser does not support desktop notifications.');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      alert('Notifications are blocked. Allow them in your browser settings to enable.');
+      return;
+    }
+    if (notifyOnComplete) {
+      notifyOnComplete = false;
+      return;
+    }
+    if (Notification.permission === 'default') {
+      const result = await Notification.requestPermission();
+      if (result !== 'granted') return;
+    }
+    notifyOnComplete = true;
+  }
 
   function startStream() {
     if (es || isTerminal(liveStatus)) return;
     es = new EventSource(`/runs/${data.run.id}/log-stream`);
 
-    es.addEventListener('log', async (ev) => {
+    es.addEventListener('log', (ev) => {
       const e = ev as MessageEvent<string>;
       liveLog += e.data + '\n';
-      if (autoScroll) {
-        await tick();
-        scrollToBottom();
-      }
     });
 
     es.addEventListener('done', async (ev) => {
@@ -67,17 +112,15 @@
         liveStatus = payload.status;
         liveExitCode = payload.exit_code;
       } catch {
-        // ignore parse errors
+        // ignore
       }
       stopStream();
-      // Refresh server-side data so timestamps + final log are authoritative.
+      maybeFireDesktopNotification();
       await invalidateAll();
     });
 
     es.onerror = () => {
       stopStream();
-      // The connection may have closed naturally; if the run is still
-      // non-terminal in our local state, retry after a short delay.
       if (!isTerminal(liveStatus)) {
         setTimeout(startStream, 2000);
       }
@@ -91,16 +134,6 @@
     }
   }
 
-  function scrollToBottom() {
-    if (logEl) logEl.scrollTop = logEl.scrollHeight;
-  }
-
-  function handleScroll() {
-    if (!logEl) return;
-    const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 16;
-    autoScroll = atBottom;
-  }
-
   async function cancel() {
     if (cancelling) return;
     cancelling = true;
@@ -111,10 +144,6 @@
     }
   }
 
-  // Sync server data into reactive local state. On first mount we seed from
-  // whatever the server load returned; afterwards we only overwrite when the
-  // run reaches a terminal state and a fresh full log is available (so SSE
-  // appends mid-run aren't clobbered by a re-fetch).
   $effect(() => {
     if (!initialized) {
       liveLog = data.log;
@@ -132,169 +161,306 @@
 
   onMount(startStream);
   onDestroy(stopStream);
+
 </script>
 
 <style>
   h1 {
-    font-size: 1.5rem;
-    margin: 0 0 0.25rem 0;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
+    font-size: var(--fs-xl);
+    margin: 0;
+    font-weight: var(--fw-semibold);
+    letter-spacing: -0.02em;
+    line-height: var(--lh-tight);
   }
 
-  .dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .breadcrumb {
-    color: #6b7280;
-    font-size: 0.875rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .header-row {
+  .hero {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 1.5rem;
-    gap: 1rem;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+    flex-wrap: wrap;
   }
+  .hero-main { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; flex: 1; }
+  .hero-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2);
+    color: var(--text-dim);
+    font-size: var(--fs-sm);
+  }
+  .hero-meta-item { display: inline-flex; align-items: baseline; gap: 0.375rem; }
+  .hero-meta-label {
+    color: var(--text-dim);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .hero-meta-item strong {
+    color: var(--text);
+    font-weight: var(--fw-medium);
+  }
+  .mono { font-family: var(--font-mono); }
+  .hero-sep { color: var(--border-strong); user-select: none; }
 
   .actions {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-2);
     flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .approve-form { display: flex; gap: var(--space-2); margin: 0; }
+
+  .dim { color: var(--text-dim); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
   }
 
-  .panel {
-    background: #14181d;
-    border: 1px solid #1f2429;
-    border-radius: 8px;
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 1rem;
-  }
-
-  .panel h2 {
-    margin-top: 0;
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #9ca3af;
-    font-weight: 600;
+  @media (min-width: 1280px) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr) 320px;
+      align-items: start;
+    }
+    .layout > .main-col { min-width: 0; }
+    .layout > .meta-col { position: sticky; top: var(--space-4); }
+    .layout > .meta-col > :global(section) { margin-bottom: var(--space-4); }
   }
 
   .row {
     display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 0.75rem;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid #1f2429;
+    grid-template-columns: 110px 1fr;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
     font-size: 0.875rem;
   }
-
-  .row:last-child {
-    border-bottom: none;
-  }
-
-  .row .label {
-    color: #6b7280;
-  }
-
+  .row:last-child { border-bottom: none; }
+  .row .label { color: var(--text-dim); }
   .row .value {
-    color: #e8eaed;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--text);
+    font-family: var(--font-mono);
     word-break: break-all;
   }
+  .value-pre { white-space: pre-wrap; }
 
-  .log-panel {
-    padding: 0;
+  .log-section {
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
   }
-
-  .log-header {
-    padding: 0.875rem 1.25rem;
-    border-bottom: 1px solid #1f2429;
+  .log-section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    flex-wrap: wrap;
   }
-
-  .log-header h2 {
+  .log-section-head h2 {
     margin: 0;
-  }
-
-  .log-controls {
+    font-size: var(--fs-md);
+    font-weight: var(--fw-semibold);
+    color: var(--text);
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    color: #6b7280;
-    font-size: 0.75rem;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    align-items: baseline;
+    gap: var(--space-2);
   }
-
-  pre {
-    margin: 0;
-    padding: 1rem 1.25rem;
-    background: #0d0f12;
-    color: #cbd5e1;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    font-size: 0.8125rem;
-    line-height: 1.4;
-    overflow-y: auto;
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-    min-height: 8rem;
-    max-height: 70vh;
+  .log-bytes {
+    color: var(--text-dim);
+    font-weight: var(--fw-regular);
+    font-size: var(--fs-xs);
+    font-family: var(--font-mono);
+  }
+  .live-badge {
+    color: var(--status-info-fg);
+    background: var(--status-info-bg);
+    border: 1px solid var(--status-info-border);
+    border-radius: var(--radius-full);
+    padding: 0.125rem 0.5rem;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+    animation: pulse-glow 1.6s ease-in-out infinite;
   }
 
   .empty-log {
-    color: #6b7280;
+    color: var(--text-dim);
     font-style: italic;
-    padding: 1.5rem 1.25rem;
+    padding: var(--space-6) var(--space-5);
     text-align: center;
   }
 
-  .spinner {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #eab308;
-    margin-right: 0.25rem;
-    animation: pulse 1.5s ease-in-out infinite;
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
   }
 
-  @keyframes pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
+  .compare-select {
+    background: var(--bg-panel);
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    font: inherit;
+    font-size: 0.875rem;
+  }
+
+  .empty-comments { color: var(--text-dim); font-size: 0.875rem; padding: var(--space-2) 0; }
+
+  .artifact-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .artifact-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0.375rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--fs-sm);
+  }
+  .artifact-list li:last-child { border-bottom: none; }
+  .artifact-name {
+    font-family: var(--font-mono);
+    color: var(--link);
+    flex: 1;
+    word-break: break-all;
+  }
+  .artifact-size {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    min-width: 60px;
+    text-align: right;
+  }
+  .artifact-mime {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+
+  .comment {
+    padding: 0.625rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .comment:last-of-type { border-bottom: none; }
+  .comment-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    margin-bottom: 0.25rem;
+    font-size: 0.8125rem;
+  }
+  .comment-author { color: var(--text); }
+  .comment-time { color: var(--text-dim); }
+  .comment-delete-form { margin: 0; margin-left: auto; }
+  .comment-delete-btn { padding: 0.125rem 0.5rem; font-size: 0.6875rem; }
+
+  .comment-body {
+    white-space: pre-wrap;
+    font-size: 0.875rem;
+    color: var(--text);
+  }
+  .mention {
+    color: var(--link);
+    font-weight: 500;
+  }
+
+  .comment-form { margin-top: 0.875rem; }
+  .comment-form-error {
+    color: var(--danger-text);
+    font-size: 0.8125rem;
+    margin: 0.25rem 0 0 0;
+  }
+  .comment-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--space-2);
   }
 </style>
 
-<div class="breadcrumb">
-  <a href="/">workspaces</a> / <a href={`/projects/${data.run.project_id}`}>back to project</a> / run {data.run.id.slice(0, 8)}
-</div>
+<Breadcrumb segments={[
+  { label: 'workspaces', href: '/' },
+  { label: 'back to project', href: `/projects/${data.run.project_id}` },
+  { label: `run ${data.run.id.slice(0, 8)}` }
+]} />
 
-<div class="header-row">
-  <h1>
-    <span class="dot" style="background: {statusColor(liveStatus)}"></span>
-    {data.run.task_name} <span style="color:#6b7280">({data.run.task_source})</span>
-  </h1>
+<div class="hero">
+  <div class="hero-main">
+    <div class="hero-line">
+      <StatusPill status={liveStatus} />
+      <h1>{data.run.task_name} <span class="dim">({data.run.task_source})</span></h1>
+      {#if data.run.timed_out}<Badge variant="warning" size="sm">timed out</Badge>{/if}
+      {#if data.run.attempt > 1}<Badge variant="info" size="sm">attempt {data.run.attempt}</Badge>{/if}
+      {#if isPendingApproval(liveStatus)}<Badge variant="warning" size="sm">awaiting approval</Badge>{/if}
+    </div>
+    <div class="hero-meta">
+      {#if liveExitCode != null}
+        <span class="hero-meta-item"><span class="hero-meta-label">Exit</span><strong>{liveExitCode}</strong></span>
+        <span class="hero-sep">·</span>
+      {/if}
+      <span class="hero-meta-item"><span class="hero-meta-label">Duration</span><strong>{formatDuration(data.run.started_at, data.run.finished_at)}</strong></span>
+      {#if data.run.commit_sha}
+        <span class="hero-sep">·</span>
+        <Tooltip text={data.run.commit_sha}>
+          <span class="hero-meta-item"><span class="hero-meta-label">Commit</span><strong class="mono">{data.run.commit_sha.slice(0, 7)}</strong></span>
+        </Tooltip>
+      {/if}
+      <span class="hero-sep">·</span>
+      <span class="hero-meta-item"><span class="hero-meta-label">Started</span><strong><TimeAgo value={data.run.started_at} /></strong></span>
+    </div>
+  </div>
   <div class="actions">
-    {#if !isTerminal(liveStatus)}
+    {#if isPendingApproval(liveStatus)}
+      <form method="POST" action="?/approve" class="approve-form">
+        <input type="hidden" name="approved" value="true" />
+        <button type="submit">Approve</button>
+      </form>
+      <form method="POST" action="?/approve" class="inline-form">
+        <input type="hidden" name="approved" value="false" />
+        <button type="submit" class="danger">Reject</button>
+      </form>
+    {:else if !isTerminal(liveStatus)}
+      <button type="button" class="ghost"
+              title={notifyOnComplete ? 'Disable desktop notification on completion' : 'Notify me on this device when this run finishes'}
+              aria-label="Toggle desktop notification"
+              onclick={toggleNotify}>
+        🔔 {notifyOnComplete ? 'On' : 'Off'}
+      </button>
       <button type="button" class="danger" disabled={cancelling} onclick={cancel}>
-        {cancelling ? 'Cancelling…' : 'Cancel'}
+        {cancelling ? 'Cancelling…' : 'Cancel run'}
       </button>
     {:else}
-      <form method="POST" action="?/rerun" style="margin: 0;">
-        <button type="submit">Re-run</button>
+      <form method="POST" action="?/togglePin" class="inline-form">
+        <input type="hidden" name="task_id" value={data.run.task_id} />
+        <input type="hidden" name="pinned" value={String(data.isTaskPinned)} />
+        <button type="submit" class="ghost"
+                title={data.isTaskPinned ? 'Unpin this task from your dashboard' : 'Pin this task to your dashboard'}>
+          {data.isTaskPinned ? '★ Pinned' : '☆ Pin task'}
+        </button>
       </form>
+      <form method="POST" action="?/rerun" class="inline-form">
+        <button type="submit" title="Re-run against current repo HEAD">Re-run</button>
+      </form>
+      {#if data.run.commit_sha}
+        <form method="POST" action="?/rerunPinned" class="inline-form">
+          <button type="submit" class="ghost"
+                  title={`Re-run pinned to commit ${data.run.commit_sha.slice(0, 12)}`}>
+            Re-run @ {data.run.commit_sha.slice(0, 7)}
+          </button>
+        </form>
+      {/if}
       {#if data.recentRuns.length > 0}
-        <select class="ghost"
-                style="background:#14181d; color:#9ca3af; border:1px solid #2d3540; padding:0.5rem 0.75rem; border-radius:6px; font: inherit; font-size:0.875rem;"
+        <select class="compare-select"
                 onchange={(e) => {
                   const id = (e.currentTarget as HTMLSelectElement).value;
                   if (id) window.location.href = `/runs/${data.run.id}/compare/${id}`;
@@ -309,34 +475,102 @@
   </div>
 </div>
 
-<section class="panel">
-  <h2>Run</h2>
-  <div class="row"><span class="label">Status</span><span class="value">{liveStatus}</span></div>
-  <div class="row"><span class="label">Exit code</span><span class="value">{liveExitCode ?? '—'}</span></div>
-  <div class="row"><span class="label">Commit</span><span class="value">{shortSha(data.run.commit_sha)}</span></div>
-  <div class="row"><span class="label">Duration</span><span class="value">{formatDuration(data.run.started_at, data.run.finished_at)}</span></div>
-  <div class="row"><span class="label">Started</span><span class="value">{data.run.started_at ? new Date(data.run.started_at).toLocaleString() : '—'}</span></div>
-  <div class="row"><span class="label">Finished</span><span class="value">{data.run.finished_at ? new Date(data.run.finished_at).toLocaleString() : '—'}</span></div>
-</section>
+<div class="layout">
+  <div class="main-col">
+    <section class="panel log-section">
+      <div class="log-section-head">
+        <h2>Log <span class="log-bytes">{liveLog.length.toLocaleString()} bytes</span></h2>
+        {#if !isTerminal(liveStatus)}
+          <span class="live-badge">live · {liveStatus}</span>
+        {/if}
+      </div>
+      {#if liveLog}
+        <LogViewer text={liveLog} autoScroll={!isTerminal(liveStatus)} />
+      {:else if !isTerminal(liveStatus)}
+        <div class="empty-log">Waiting for output…</div>
+      {:else}
+        <div class="empty-log">No output captured.</div>
+      {/if}
+    </section>
 
-<section class="panel log-panel">
-  <div class="log-header">
-    <h2>Log</h2>
-    <div class="log-controls">
-      {#if !isTerminal(liveStatus)}
-        <span><span class="spinner"></span>{liveStatus}</span>
+    {#if data.artifacts.length > 0}
+      <Panel title="Artifacts">
+        {#snippet actions()}
+          <span style="color: var(--text-dim); font-size: var(--fs-xs); font-family: var(--font-mono);">{data.artifacts.length} file{data.artifacts.length === 1 ? '' : 's'}</span>
+        {/snippet}
+        <ul class="artifact-list">
+          {#each data.artifacts as a (a.id)}
+            <li>
+              <a href={`/api/artifacts/${a.id}/download`} class="artifact-name">{a.relative_path}</a>
+              <span class="artifact-size">{formatBytes(a.size_bytes)}</span>
+              {#if a.mime_type}<span class="artifact-mime">{a.mime_type}</span>{/if}
+            </li>
+          {/each}
+        </ul>
+      </Panel>
+    {/if}
+
+    <Panel title="Comments">
+      {#if data.comments.length === 0}
+        <div class="empty-comments">No comments yet.</div>
+      {:else}
+        {#each data.comments as c (c.id)}
+          <div class="comment">
+            <div class="comment-head">
+              <strong class="comment-author">{c.user_display_name || 'someone'}</strong>
+              <span class="comment-time">{formatRelative(c.created_at)}</span>
+              {#if data.user && c.user_id === data.user.id}
+                <form method="POST" action="?/deleteComment" class="comment-delete-form">
+                  <input type="hidden" name="id" value={c.id} />
+                  <button type="submit" class="ghost comment-delete-btn" title="Delete">×</button>
+                </form>
+              {/if}
+            </div>
+            <div class="comment-body">
+              {#each bodyParts(c.body) as part, i (i)}
+                {#if part.mention}<span class="mention">{part.text}</span>
+                {:else}<span>{part.text}</span>{/if}
+              {/each}
+            </div>
+          </div>
+        {/each}
       {/if}
-      <span>{liveLog.length} bytes</span>
-      {#if !autoScroll && !isTerminal(liveStatus)}
-        <button type="button" class="ghost" onclick={() => { autoScroll = true; scrollToBottom(); }}>Resume tail</button>
-      {/if}
-    </div>
+      <form method="POST" action="?/comment" class="comment-form">
+        <textarea name="body" rows="3"
+                  placeholder="Add a comment. Use @display-name to mention a workspace member."
+                  bind:value={commentDraft}></textarea>
+        {#if form?.commentError}<p class="comment-form-error">{form.commentError}</p>{/if}
+        <div class="comment-form-actions">
+          <button type="submit">Post comment</button>
+        </div>
+      </form>
+    </Panel>
   </div>
-  {#if liveLog}
-    <pre bind:this={logEl} onscroll={handleScroll}>{liveLog}</pre>
-  {:else if !isTerminal(liveStatus)}
-    <div class="empty-log">Waiting for output…</div>
-  {:else}
-    <div class="empty-log">No output captured.</div>
-  {/if}
-</section>
+
+  <div class="meta-col">
+    <Panel title="Run details">
+      <div class="row"><span class="label">Status</span><span class="value"><StatusPill status={liveStatus} size="sm" /></span></div>
+      <div class="row"><span class="label">Exit code</span><span class="value">{liveExitCode ?? '—'}</span></div>
+      <div class="row"><span class="label">Commit</span><span class="value">
+        {#if data.run.commit_sha}
+          <Tooltip text={data.run.commit_sha}><span>{shortSha(data.run.commit_sha)}</span></Tooltip>
+        {:else}—{/if}
+      </span></div>
+      <div class="row"><span class="label">Duration</span><span class="value">{formatDuration(data.run.started_at, data.run.finished_at)}</span></div>
+      <div class="row"><span class="label">Started</span><span class="value"><TimeAgo value={data.run.started_at} /></span></div>
+      <div class="row"><span class="label">Finished</span><span class="value"><TimeAgo value={data.run.finished_at} /></span></div>
+      {#if data.run.params && (
+        (data.run.params.env && Object.keys(data.run.params.env).length > 0) ||
+        (data.run.params.args && data.run.params.args.length > 0)
+      )}
+        <div class="row">
+          <span class="label">Inputs</span>
+          <span class="value value-pre">{[
+            ...(data.run.params.env ? Object.entries(data.run.params.env).map(([k, v]) => `${k}=${v}`) : []),
+            ...(data.run.params.args ?? [])
+          ].join('\n')}</span>
+        </div>
+      {/if}
+    </Panel>
+  </div>
+</div>

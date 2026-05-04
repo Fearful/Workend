@@ -56,6 +56,113 @@ type Provider interface {
 	// ListRepos returns repos accessible to the authenticated user, sorted
 	// by recent activity. Page is 1-indexed; perPage capped per provider.
 	ListRepos(ctx context.Context, accessToken string, page, perPage int) ([]Repo, error)
+
+	// ListBranches returns the branches of a repo. fullName is the
+	// provider-specific identifier ("owner/repo" for GitHub/Gitea,
+	// "group/subgroup/project" for GitLab).
+	ListBranches(ctx context.Context, accessToken, fullName string) ([]Branch, error)
+
+	// CreatePullRequest opens a PR/MR from sourceBranch into targetBranch
+	// on the given repo. Returns the public URL and provider-side number.
+	CreatePullRequest(ctx context.Context, accessToken, fullName string, in PullRequestInput) (*PullRequestResult, error)
+
+	// ListLabels returns the upstream label set for the repo. Used at
+	// board first-sync to populate column choices.
+	ListLabels(ctx context.Context, accessToken, fullName string) ([]Label, error)
+
+	// ListIssues returns issues for the repo. Excludes pull requests.
+	// Both open and closed are returned so the board can show closed swim
+	// lanes; the caller paginates if necessary.
+	ListIssues(ctx context.Context, accessToken, fullName string) ([]Issue, error)
+
+	// ListIssueComments returns the comment thread for one issue.
+	ListIssueComments(ctx context.Context, accessToken, fullName string, number int) ([]IssueComment, error)
+
+	// CreateIssueComment posts a new comment.
+	CreateIssueComment(ctx context.Context, accessToken, fullName string, number int, body string) (*IssueComment, error)
+
+	// SetIssueLabels replaces the label set on an issue (the drag/drop
+	// destination column dictates the full label list).
+	SetIssueLabels(ctx context.Context, accessToken, fullName string, number int, labels []string) error
+
+	// CloseIssue marks an issue as closed.
+	CloseIssue(ctx context.Context, accessToken, fullName string, number int) error
+
+	// TriggerCIWorkflow kicks off the upstream CI for a branch. workflow is
+	// the provider-specific identifier (filename for GitHub, ref for GitLab,
+	// pipeline name for Gitea Actions). Returns a public URL the user can
+	// click to follow the run.
+	TriggerCIWorkflow(ctx context.Context, accessToken, fullName, workflow, branch string, inputs map[string]string) (*CIDispatchResult, error)
+
+	// ListPipelineRuns returns recent CI/CD pipeline runs for a repo.
+	ListPipelineRuns(ctx context.Context, accessToken, fullName string, limit int) ([]PipelineRunInfo, error)
+}
+
+// CIDispatchResult is what the provider returned after triggering CI.
+type CIDispatchResult struct {
+	URL string `json:"url"` // best-effort link to the workflow runs page
+}
+
+// PipelineRunInfo is a normalized CI/CD run across providers.
+type PipelineRunInfo struct {
+	ProviderRunID string     `json:"provider_run_id"`
+	Status        string     `json:"status"` // "success" | "failure" | "running" | "pending" | "cancelled"
+	Branch        string     `json:"branch"`
+	CommitSHA     string     `json:"commit_sha"`
+	WorkflowName  string     `json:"workflow_name"`
+	HTMLURL       string     `json:"html_url"`
+	StartedAt     *time.Time `json:"started_at"`
+	FinishedAt    *time.Time `json:"finished_at"`
+}
+
+// Label is a normalized upstream label.
+type Label struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+// Issue is the normalized cross-provider issue.
+type Issue struct {
+	Number          int        `json:"number"`
+	Title           string     `json:"title"`
+	Body            string     `json:"body"`
+	State           string     `json:"state"` // 'open' | 'closed'
+	Labels          []string   `json:"labels"`
+	AuthorHandle    string     `json:"author_handle"`
+	AuthorURL       string     `json:"author_url"`
+	HTMLURL         string     `json:"html_url"`
+	UpdatedAt       *time.Time `json:"updated_at"`
+}
+
+// IssueComment is one comment on an issue.
+type IssueComment struct {
+	ProviderID   int64     `json:"provider_id"`
+	Body         string    `json:"body"`
+	AuthorHandle string    `json:"author_handle"`
+	HTMLURL      string    `json:"html_url"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// Branch is the normalized cross-provider branch summary.
+type Branch struct {
+	Name      string `json:"name"`
+	CommitSHA string `json:"commit_sha"`
+	Protected bool   `json:"protected"`
+	Default   bool   `json:"default"`
+}
+
+// PullRequestInput is the user-supplied content for an outgoing PR/MR.
+type PullRequestInput struct {
+	Source string // source branch, e.g. "feature/x"
+	Target string // target branch, e.g. "main"
+	Title  string
+	Body   string
+}
+
+// PullRequestResult is what the provider returned after creation.
+type PullRequestResult struct {
+	URL    string `json:"url"`
+	Number int    `json:"number"`
 }
 
 // Token is what ExchangeCode and RefreshAccess return.

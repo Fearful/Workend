@@ -1,175 +1,159 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { shortSha, formatDuration } from '$lib/utils';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import StatusPill from '$lib/components/StatusPill.svelte';
+  import TimeAgo from '$lib/components/TimeAgo.svelte';
+  import Tooltip from '$lib/components/Tooltip.svelte';
+  import FilterPills from '$lib/components/FilterPills.svelte';
+  import SectionHeader from '$lib/components/SectionHeader.svelte';
+  import DensityToggle from '$lib/components/DensityToggle.svelte';
 
   let { data } = $props();
+  let density = $state<'comfortable' | 'compact'>('comfortable');
 
-  function statusColor(status: string): string {
-    switch (status) {
-      case 'succeeded':
-        return '#22c55e';
-      case 'queued':
-      case 'running':
-        return '#eab308';
-      case 'failed':
-        return '#ef4444';
-      case 'cancelled':
-        return '#6b7280';
-      default:
-        return '#6b7280';
-    }
-  }
+  type Filter = '' | 'succeeded' | 'failed' | 'cancelled' | 'running';
 
-  function shortSha(sha: string | null): string {
-    return sha ? sha.slice(0, 7) : '—';
-  }
-
-  function formatDuration(start: string | null, end: string | null): string {
-    if (!start) return '—';
-    const startMs = new Date(start).getTime();
-    const endMs = end ? new Date(end).getTime() : Date.now();
-    const sec = Math.round((endMs - startMs) / 1000);
-    if (sec < 60) return `${sec}s`;
-    return `${Math.floor(sec / 60)}m ${sec % 60}s`;
-  }
-
-  function setFilter(status: string) {
+  function setFilter(status: Filter) {
     const url = new URL(page.url);
     if (status) url.searchParams.set('status', status);
     else url.searchParams.delete('status');
     goto(url, { replaceState: true });
   }
+
+  let counts = $derived.by(() => {
+    const c: Record<string, number> = { '': data.runs.length };
+    for (const r of data.runs) c[r.status] = (c[r.status] || 0) + 1;
+    return c;
+  });
+
+  let filterOptions = $derived([
+    { value: '' as Filter, label: 'All', count: counts[''] || 0 },
+    { value: 'succeeded' as Filter, label: 'Succeeded', count: counts['succeeded'] || 0 },
+    { value: 'failed' as Filter, label: 'Failed', count: counts['failed'] || 0 },
+    { value: 'running' as Filter, label: 'Running', count: counts['running'] || 0 },
+    { value: 'cancelled' as Filter, label: 'Cancelled', count: counts['cancelled'] || 0 }
+  ]);
 </script>
 
 <style>
-  h1 {
-    font-size: 1.5rem;
-    margin: 0 0 0.5rem 0;
-  }
-
-  .breadcrumb {
-    color: #6b7280;
-    font-size: 0.875rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .filters {
+  .toolbar {
     display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    gap: var(--space-3);
     align-items: center;
-    font-size: 0.875rem;
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
   }
-
-  .filters .label {
-    color: #6b7280;
-  }
-
-  .pill {
-    padding: 0.25rem 0.75rem;
-    background: transparent;
-    color: #9ca3af;
-    border: 1px solid #2d3540;
-    border-radius: 999px;
-    cursor: pointer;
-    font-size: 0.8125rem;
-    font-family: inherit;
-  }
-
-  .pill.active {
-    background: #2563eb;
-    color: white;
-    border-color: #2563eb;
-  }
-
-  .pill:hover:not(.active) {
-    background: #1a1f25;
-    color: #e8eaed;
-  }
-
-  .empty {
-    text-align: center;
-    padding: 3rem;
-    color: #9ca3af;
-    background: #14181d;
-    border: 1px dashed #1f2429;
-    border-radius: 8px;
+  .toolbar-actions {
+    margin-left: auto;
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
   }
 
   .run-row {
     display: grid;
     grid-template-columns: auto 1fr auto auto auto auto;
     align-items: center;
-    gap: 1rem;
-    padding: 0.625rem 1rem;
-    background: #14181d;
-    border: 1px solid #1f2429;
-    border-radius: 6px;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     text-decoration: none;
     color: inherit;
-    margin-bottom: 0.375rem;
-    font-size: 0.875rem;
-    transition: border-color 100ms ease;
+    margin-bottom: var(--space-2);
+    font-size: var(--fs-md);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
   }
-
+  .run-row.compact {
+    padding: 0.375rem var(--space-3);
+    font-size: var(--fs-sm);
+    margin-bottom: 0.25rem;
+  }
   .run-row:hover {
-    border-color: #2563eb;
+    border-color: var(--border-strong);
     text-decoration: none;
+    box-shadow: var(--shadow-card);
   }
 
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  }
-
-  .run-name {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  }
-
+  .run-name { font-family: var(--font-mono); font-weight: var(--fw-medium); }
+  .dim { color: var(--text-dim); font-weight: var(--fw-regular); }
   .run-meta {
-    color: #6b7280;
-    font-size: 0.75rem;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--text-dim);
+    font-size: var(--fs-xs);
+    font-family: var(--font-mono);
+  }
+  .exit-bad { color: var(--status-danger-fg); }
+  .branch-tag {
+    display: inline-block;
+    margin-left: 0.375rem;
+    padding: 0.0625rem 0.375rem;
+    background: var(--status-info-bg);
+    color: var(--status-info-fg);
+    border: 1px solid var(--status-info-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.6875rem;
+    font-family: var(--font-mono);
+    font-weight: var(--fw-regular);
+    vertical-align: middle;
+  }
+
+  @media (max-width: 768px) {
+    .run-row { grid-template-columns: auto 1fr auto; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+    .run-row > :nth-child(3),
+    .run-row > :nth-child(4),
+    .run-row > :nth-child(5) { display: none; }
+    .run-stack-mobile {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .run-stack-mobile .run-meta { font-size: 0.6875rem; }
+  }
+  @media (min-width: 769px) {
+    .mobile-only { display: none; }
   }
 </style>
 
-<div class="breadcrumb">
-  <a href="/">workspaces</a>
-  {#if data.workspace}
-    / <a href={`/workspaces/${data.workspace.id}`}>{data.workspace.name}</a>
-  {/if}
-  / <a href={`/projects/${data.project.id}`}>{data.project.name}</a> / runs
-</div>
+<SectionHeader title="Run history" />
 
-<h1>Run history</h1>
-
-<div class="filters">
-  <span class="label">Filter:</span>
-  <button class="pill {data.filter === '' ? 'active' : ''}" onclick={() => setFilter('')}>All</button>
-  <button class="pill {data.filter === 'succeeded' ? 'active' : ''}" onclick={() => setFilter('succeeded')}>Succeeded</button>
-  <button class="pill {data.filter === 'failed' ? 'active' : ''}" onclick={() => setFilter('failed')}>Failed</button>
-  <button class="pill {data.filter === 'cancelled' ? 'active' : ''}" onclick={() => setFilter('cancelled')}>Cancelled</button>
-  <button class="pill {data.filter === 'running' ? 'active' : ''}" onclick={() => setFilter('running')}>Running</button>
+<div class="toolbar">
+  <FilterPills options={filterOptions} value={(data.filter || '') as Filter} onChange={setFilter} />
+  <div class="toolbar-actions">
+    <DensityToggle storageKey="workend.density.runs" onChange={(v) => density = v} />
+  </div>
 </div>
 
 {#if data.runs.length === 0}
-  <div class="empty">
+  <EmptyState>
     {#if data.filter}
       No runs matching <strong>{data.filter}</strong>.
     {:else}
       No runs yet.
     {/if}
-  </div>
+  </EmptyState>
 {:else}
   {#each data.runs as r (r.id)}
-    <a href={`/runs/${r.id}`} class="run-row">
-      <span class="dot" style="background: {statusColor(r.status)}"></span>
-      <span class="run-name">{r.task_name} <span style="color:#6b7280">({r.task_source})</span></span>
-      <span class="run-meta">{shortSha(r.commit_sha)}</span>
-      <span class="run-meta">{r.exit_code ?? '—'}</span>
+    <a href={`/runs/${r.id}`} class="run-row" class:compact={density === 'compact'}>
+      <StatusPill status={r.status} size="sm" />
+      <span class="run-name">
+        {r.task_name} <span class="dim">({r.task_source})</span>
+        {#if r.branch}<span class="branch-tag" title={`Ran on branch ${r.branch}`}>{r.branch}</span>{/if}
+        <span class="mobile-only run-stack-mobile">
+          <span class="run-meta">{formatDuration(r.started_at, r.finished_at)} · <TimeAgo value={r.created_at} /></span>
+        </span>
+      </span>
+      <Tooltip text={r.commit_sha || 'no commit'}>
+        <span class="run-meta">{shortSha(r.commit_sha)}</span>
+      </Tooltip>
+      <span class="run-meta" class:exit-bad={r.exit_code != null && r.exit_code !== 0}>
+        {r.exit_code != null ? `exit ${r.exit_code}` : '—'}
+      </span>
       <span class="run-meta">{formatDuration(r.started_at, r.finished_at)}</span>
-      <span class="run-meta">{new Date(r.created_at).toLocaleString()}</span>
+      <span class="run-meta"><TimeAgo value={r.created_at} /></span>
     </a>
   {/each}
 {/if}

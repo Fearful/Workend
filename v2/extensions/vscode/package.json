@@ -1,0 +1,63 @@
+{
+  "name": "workend-vscode",
+  "displayName": "Workend",
+  "description": "Run Workend tasks and follow logs without leaving VS Code.",
+  "version": "0.1.0",
+  "publisher": "workend",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Workend",
+      "properties": {
+        "workend.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "Base URL of the Workend API."
+        },
+        "workend.sessionFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the session file written by `workend login`. Defaults to $XDG_CONFIG_HOME/workend/session."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "workend",
+          "title": "Workend",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "views": {
+      "workend": [
+        { "id": "workend.workspaces", "name": "Workspaces" },
+        { "id": "workend.recentRuns", "name": "Recent runs" }
+      ]
+    },
+    "commands": [
+      { "command": "workend.refresh", "title": "Workend: Refresh" },
+      { "command": "workend.runTask", "title": "Workend: Run task…" },
+      { "command": "workend.openRun", "title": "Workend: Open recent run…" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "workend.refresh", "when": "view == workend.workspaces", "group": "navigation" }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.5.0"
+  }
+}

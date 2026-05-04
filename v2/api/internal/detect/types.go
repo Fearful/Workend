@@ -8,7 +8,7 @@ package detect
 import "context"
 
 type Task struct {
-	Source     string // "npm" | "just"
+	Source     string // "npm" | "pnpm" | "yarn" | "bun" | "just" | "dockerfile" | "dagger" | custom
 	Name       string
 	RawCommand string // verbatim command string the runner will execute
 }

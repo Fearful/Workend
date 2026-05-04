@@ -226,6 +226,63 @@ func (r *Registry) ListReposForUser(ctx context.Context, userID uuid.UUID, provi
 	return repos, err
 }
 
+// ListBranchesForCloneURL routes to whichever provider owns this URL,
+// resolves owner/repo from the URL path, and returns its branches with
+// lazy-on-401 refresh.
+func (r *Registry) ListBranchesForCloneURL(ctx context.Context, userID uuid.UUID, gitURL string) ([]Branch, error) {
+	p, ok := r.ForCloneURL(gitURL)
+	if !ok {
+		return nil, ErrUnknownProvider
+	}
+	access, _, err := r.accessTokenForProvider(ctx, userID, p)
+	if err != nil {
+		return nil, err
+	}
+	if access == "" {
+		return nil, ErrConnectionNotFound
+	}
+	fullName := RepoFullNameFromURL(gitURL)
+	if fullName == "" {
+		return nil, fmt.Errorf("cannot derive repo path from %q", gitURL)
+	}
+	branches, err := p.ListBranches(ctx, access, fullName)
+	if err != nil && isUnauthorized(err) {
+		newAccess, refreshErr := r.ForceRefresh(ctx, userID, p)
+		if refreshErr == nil && newAccess != "" {
+			return p.ListBranches(ctx, newAccess, fullName)
+		}
+	}
+	return branches, err
+}
+
+// CreatePullRequestForCloneURL routes to the provider owning gitURL and
+// opens a PR/MR.
+func (r *Registry) CreatePullRequestForCloneURL(ctx context.Context, userID uuid.UUID, gitURL string, in PullRequestInput) (*PullRequestResult, error) {
+	p, ok := r.ForCloneURL(gitURL)
+	if !ok {
+		return nil, ErrUnknownProvider
+	}
+	access, _, err := r.accessTokenForProvider(ctx, userID, p)
+	if err != nil {
+		return nil, err
+	}
+	if access == "" {
+		return nil, ErrConnectionNotFound
+	}
+	fullName := RepoFullNameFromURL(gitURL)
+	if fullName == "" {
+		return nil, fmt.Errorf("cannot derive repo path from %q", gitURL)
+	}
+	res, err := p.CreatePullRequest(ctx, access, fullName, in)
+	if err != nil && isUnauthorized(err) {
+		newAccess, refreshErr := r.ForceRefresh(ctx, userID, p)
+		if refreshErr == nil && newAccess != "" {
+			return p.CreatePullRequest(ctx, newAccess, fullName, in)
+		}
+	}
+	return res, err
+}
+
 // ForceRefresh ignores expires_at and immediately exchanges the stored
 // refresh token for a new access token, persisting the result. Used by
 // callers (Stage 27) that observed a 401 from the upstream API even when

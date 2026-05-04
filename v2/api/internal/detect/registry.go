@@ -16,6 +16,14 @@ func builtinDetectors() []Detector {
 		NPM{},
 		Just{},
 		Dockerfile{},
+		Gradle{},
+		Makefile{},
+		Maven{},
+		Composer{},
+		Cargo{},
+		GoMod{},
+		Python{},
+		Compose{},
 	}
 }
 

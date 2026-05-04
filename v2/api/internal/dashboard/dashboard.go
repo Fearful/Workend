@@ -103,23 +103,23 @@ func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
-// topLang returns the language with the highest line count, or nil if no
-// stats present.
+// topLang returns the language with the most code lines, or nil if no
+// stats present. Uses alphabetical name as tiebreaker for determinism.
 func topLang(raw []byte) *string {
 	if len(raw) == 0 {
 		return nil
 	}
 	var langs map[string]struct {
-		Lines int `json:"lines"`
+		Code int `json:"code"`
 	}
 	if err := json.Unmarshal(raw, &langs); err != nil {
 		return nil
 	}
 	var name string
-	maxLines := -1
+	maxCode := -1
 	for k, v := range langs {
-		if v.Lines > maxLines {
-			maxLines = v.Lines
+		if v.Code > maxCode || (v.Code == maxCode && k < name) {
+			maxCode = v.Code
 			name = k
 		}
 	}

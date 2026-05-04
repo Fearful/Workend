@@ -1,35 +1,25 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import FlashMessage from '$lib/components/FlashMessage.svelte';
+
   let { form } = $props();
 </script>
 
 <style>
-  h1 {
-    font-size: 1.5rem;
-    margin: 0 0 1.5rem 0;
-  }
-
-  form {
-    max-width: 480px;
-  }
+  form { max-width: 480px; }
 
   textarea {
     min-height: 4rem;
     resize: vertical;
   }
 
-  .error {
-    color: #ef4444;
-    font-size: 0.875rem;
-    margin: 0.5rem 0;
-  }
-
   .actions {
     display: flex;
-    gap: 0.75rem;
+    gap: var(--space-3);
   }
 </style>
 
-<h1>New workspace</h1>
+<PageHeader title="New workspace" />
 
 <form method="POST">
   <div class="field">
@@ -41,9 +31,7 @@
     <textarea id="description" name="description" maxlength="500">{form?.description || ''}</textarea>
   </div>
 
-  {#if form?.error}
-    <p class="error">{form.error}</p>
-  {/if}
+  {#if form?.error}<FlashMessage type="error">{form.error}</FlashMessage>{/if}
 
   <div class="actions">
     <button type="submit">Create</button>

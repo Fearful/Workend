@@ -2,9 +2,18 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { apiFetch, parseSetCookie } from '$lib/api';
 
+interface AuthConfig {
+  oidc_configured: boolean;
+  oidc_provider_name?: string;
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
   if (locals.user) throw redirect(303, '/');
-  return {};
+  const authCfg = await apiFetch<AuthConfig>('/api/auth/config');
+  return {
+    oidcConfigured: authCfg.ok ? (authCfg.data?.oidc_configured ?? false) : false,
+    oidcProviderName: authCfg.ok ? (authCfg.data?.oidc_provider_name ?? 'SSO') : 'SSO'
+  };
 };
 
 export const actions: Actions = {

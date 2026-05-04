@@ -14,13 +14,32 @@ import (
 	wdagger "workend/api/internal/dagger"
 )
 
-// Lang is one entry in tokei's output.
+// Lang is the per-language stats stored in the DB and returned to the frontend.
 type Lang struct {
 	Files    int `json:"files"`
 	Lines    int `json:"lines"`
 	Code     int `json:"code"`
 	Comments int `json:"comments"`
 	Blanks   int `json:"blanks"`
+}
+
+// tokeiLang matches tokei's actual JSON output per language entry.
+type tokeiLang struct {
+	Blanks   int           `json:"blanks"`
+	Code     int           `json:"code"`
+	Comments int           `json:"comments"`
+	Reports  []tokeiReport `json:"reports"`
+}
+
+type tokeiReport struct {
+	Name  string    `json:"name"`
+	Stats tokeiStat `json:"stats"`
+}
+
+type tokeiStat struct {
+	Blanks   int `json:"blanks"`
+	Code     int `json:"code"`
+	Comments int `json:"comments"`
 }
 
 // Result is what Compute returns.
@@ -50,21 +69,27 @@ func Compute(ctx context.Context, dc *wdagger.Client, repoPath string) (*Result,
 		return nil, fmt.Errorf("tokei exec: %w", err)
 	}
 
-	// tokei -o json returns: { "Total": {...}, "Go": {...}, ... }
-	raw := map[string]Lang{}
+	raw := map[string]tokeiLang{}
 	if err := json.Unmarshal([]byte(out), &raw); err != nil {
 		return nil, fmt.Errorf("parse tokei output: %w", err)
 	}
 
 	res := &Result{Languages: map[string]Lang{}}
-	for name, l := range raw {
+	for name, tl := range raw {
+		lang := Lang{
+			Files:    len(tl.Reports),
+			Lines:    tl.Code + tl.Comments + tl.Blanks,
+			Code:     tl.Code,
+			Comments: tl.Comments,
+			Blanks:   tl.Blanks,
+		}
 		if name == "Total" {
-			res.TotalFiles = l.Files
-			res.TotalLines = l.Lines
-			res.TotalCode = l.Code
+			res.TotalLines = lang.Lines
+			res.TotalCode = lang.Code
 			continue
 		}
-		res.Languages[name] = l
+		res.Languages[name] = lang
+		res.TotalFiles += lang.Files
 	}
 	return res, nil
 }

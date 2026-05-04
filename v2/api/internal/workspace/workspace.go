@@ -321,6 +321,138 @@ func (h *Handlers) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ActivityEvent is one row of the workspace activity feed: a denormalized
+// view over audit_log filtered to events that touched the workspace, its
+// projects, or runs in those projects.
+type ActivityEvent struct {
+	ID          int64     `json:"id"`
+	OccurredAt  time.Time `json:"occurred_at"`
+	ActorID     *uuid.UUID `json:"actor_id"`
+	ActorName   string    `json:"actor_name"`
+	Action      string    `json:"action"`
+	TargetKind  string    `json:"target_kind"`
+	TargetID    string    `json:"target_id"`
+	Metadata    json.RawMessage `json:"metadata,omitempty"`
+}
+
+// Activity returns the last N events in a workspace. Membership-gated.
+//
+// GET /api/workspaces/:id/activity?limit=N&before=<id>
+func (h *Handlers) Activity(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	wsID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if _, err := RoleOf(r.Context(), h.Pool, uid, wsID); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	limit := 50
+	if v := r.URL.Query().Get("limit"); v != "" {
+		var n int
+		_, _ = fmtSscanInt(v, &n)
+		if n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	beforeID := int64(0)
+	if v := r.URL.Query().Get("before"); v != "" {
+		var n int64
+		_, _ = fmtSscanInt64(v, &n)
+		if n > 0 {
+			beforeID = n
+		}
+	}
+
+	args := []any{wsID, limit}
+	whereBefore := ""
+	if beforeID > 0 {
+		args = append(args, beforeID)
+		whereBefore = " AND al.id < $3"
+	}
+
+	q := `
+		SELECT al.id, al.occurred_at, al.actor_id, COALESCE(u.display_name, ''),
+		       al.action, COALESCE(al.target_kind, ''), COALESCE(al.target_id, ''),
+		       al.metadata
+		FROM audit_log al
+		LEFT JOIN users u ON u.id = al.actor_id
+		WHERE (
+		    (al.target_kind = 'workspace' AND al.target_id = $1::text)
+		    OR (al.target_kind = 'project' AND al.target_id IN (
+		         SELECT id::text FROM projects WHERE workspace_id = $1))
+		    OR (al.target_kind = 'run' AND al.target_id IN (
+		         SELECT r.id::text FROM runs r
+		         JOIN projects p ON p.id = r.project_id
+		         WHERE p.workspace_id = $1))
+		)` + whereBefore + `
+		ORDER BY al.id DESC
+		LIMIT $2
+	`
+	rows, err := h.Pool.Query(r.Context(), q, args...)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	out := []ActivityEvent{}
+	for rows.Next() {
+		var e ActivityEvent
+		var raw []byte
+		if err := rows.Scan(&e.ID, &e.OccurredAt, &e.ActorID, &e.ActorName,
+			&e.Action, &e.TargetKind, &e.TargetID, &raw); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if len(raw) > 0 {
+			e.Metadata = json.RawMessage(raw)
+		}
+		out = append(out, e)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// fmtSscanInt is a tiny strconv wrapper that doesn't add a strconv import to
+// the file's already-large list. (strconv would be cleaner; keeping as-is to
+// minimize churn here.)
+func fmtSscanInt(s string, out *int) (int, error)   { return fmtScan(s, out) }
+func fmtSscanInt64(s string, out *int64) (int, error) { return fmtScan(s, out) }
+func fmtScan(s string, out any) (int, error) {
+	switch v := out.(type) {
+	case *int:
+		var x int
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			if c < '0' || c > '9' {
+				return 0, errInvalid
+			}
+			x = x*10 + int(c-'0')
+			if x > 1<<30 {
+				return 0, errInvalid
+			}
+		}
+		*v = x
+	case *int64:
+		var x int64
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			if c < '0' || c > '9' {
+				return 0, errInvalid
+			}
+			x = x*10 + int64(c-'0')
+		}
+		*v = x
+	}
+	return 1, nil
+}
+
+var errInvalid = errors.New("invalid number")
+
 // RoleOf returns the user's role on a workspace, or an error if no membership.
 func RoleOf(ctx context.Context, pool *pgxpool.Pool, userID, workspaceID uuid.UUID) (string, error) {
 	var role string

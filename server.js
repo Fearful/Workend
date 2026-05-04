@@ -51,7 +51,7 @@ require('./backend/routes/index')(app);
 //Prototype api
 require('./frontend/pr0t0/api/routes/index')(app);
 //Boards api
-require('./frontend/boards/api/routes/index')(app);
+// require('./frontend/boards/api/routes/index')(app);
 
 //Serve file system
 app.use('/api/fs', serveIndex(getUserHome(), {'icons': true, 'template': 'backend/templates/files.html', 'view': 'details'}));

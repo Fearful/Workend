@@ -7,9 +7,9 @@ var User = require('../models/user');
 var Project = require('../models/project');
 var Role = require('../models/permissions');
 var Permission = require('../models/permissions');
-var Issue = require('../../frontend/boards/api/models/issue');
-var Task = require('../../frontend/boards/api/models/task');
-var Task = require('../../frontend/pr0t0/api/models/prototype');
+// var Issue = require('../../frontend/boards/api/models/issue');
+// var Task = require('../../frontend/boards/api/models/task');
+var Template = require('../../frontend/pr0t0/api/models/template');
 var Product = require('../models/product');
 var Workspace = require('../models/workspace');
 // Serialize sessions

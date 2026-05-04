@@ -1,18 +1,16 @@
-import { error, redirect } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { apiFetch } from '$lib/api';
 
 const SESSION_COOKIE = 'workend_session';
 
-interface Project {
-  id: string;
-  workspace_id: string;
-  name: string;
-}
-
-interface Workspace {
-  id: string;
-  name: string;
+interface VulnSummary {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  unknown: number;
+  top: { id: string; package: string; severity: string; fixed_in?: string }[];
 }
 
 interface Image {
@@ -24,6 +22,9 @@ interface Image {
   size_bytes: number | null;
   commit_sha: string | null;
   built_at: string;
+  scan_status: 'pending' | 'ok' | 'error' | null;
+  scan_completed_at: string | null;
+  vuln_summary: VulnSummary | null;
 }
 
 export const load: PageServerLoad = async ({ params, locals, cookies }) => {
@@ -31,18 +32,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   const cookie = cookies.get(SESSION_COOKIE);
   const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
 
-  const projResult = await apiFetch<Project>(`/api/projects/${params.id}`, { cookie: cookieHeader });
-  if (projResult.status === 404) throw error(404, 'project not found');
-  if (!projResult.ok || !projResult.data) throw error(500, projResult.error || 'failed to load');
-
-  const [wsResult, imagesResult] = await Promise.all([
-    apiFetch<Workspace>(`/api/workspaces/${projResult.data.workspace_id}`, { cookie: cookieHeader }),
-    apiFetch<Image[]>(`/api/projects/${params.id}/images`, { cookie: cookieHeader })
-  ]);
+  const imagesResult = await apiFetch<Image[]>(`/api/projects/${params.id}/images`, { cookie: cookieHeader });
 
   return {
-    project: projResult.data,
-    workspace: wsResult.ok ? (wsResult.data ?? null) : null,
     images: imagesResult.ok ? (imagesResult.data ?? []) : []
   };
 };

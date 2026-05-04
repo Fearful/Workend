@@ -14,9 +14,10 @@ import (
 )
 
 type Handlers struct {
-	Pool   *pgxpool.Pool
-	Secure bool // set HTTPS-only cookie
-	Audit  *audit.Logger
+	Pool             *pgxpool.Pool
+	Secure           bool // set HTTPS-only cookie
+	Audit            *audit.Logger
+	OIDCDisableSignup bool
 }
 
 type signupReq struct {
@@ -38,6 +39,11 @@ type meResp struct {
 }
 
 func (h *Handlers) Signup(w http.ResponseWriter, r *http.Request) {
+	if h.OIDCDisableSignup {
+		http.Error(w, "signup disabled — use your organization's SSO to sign in", http.StatusForbidden)
+		return
+	}
+
 	var req signupReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)

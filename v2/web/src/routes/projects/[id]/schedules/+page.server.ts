@@ -1,19 +1,8 @@
-import { error, fail, redirect } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { apiFetch } from '$lib/api';
 
 const SESSION_COOKIE = 'workend_session';
-
-interface Project {
-  id: string;
-  workspace_id: string;
-  name: string;
-}
-
-interface Workspace {
-  id: string;
-  name: string;
-}
 
 interface Task {
   id: string;
@@ -39,21 +28,12 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   const cookie = cookies.get(SESSION_COOKIE);
   const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
 
-  const [projResult, wsListResult, tasksResult, schedulesResult] = await Promise.all([
-    apiFetch<Project>(`/api/projects/${params.id}`, { cookie: cookieHeader }),
-    apiFetch<Workspace>(`/api/workspaces/$WS$`, { cookie: cookieHeader }), // placeholder, replaced below
+  const [tasksResult, schedulesResult] = await Promise.all([
     apiFetch<Task[]>(`/api/projects/${params.id}/tasks`, { cookie: cookieHeader }),
     apiFetch<Schedule[]>(`/api/projects/${params.id}/schedules`, { cookie: cookieHeader })
   ]);
 
-  if (projResult.status === 404) throw error(404, 'project not found');
-  if (!projResult.ok || !projResult.data) throw error(500, projResult.error || 'failed to load');
-
-  const wsResult = await apiFetch<Workspace>(`/api/workspaces/${projResult.data.workspace_id}`, { cookie: cookieHeader });
-
   return {
-    project: projResult.data,
-    workspace: wsResult.ok ? (wsResult.data ?? null) : null,
     tasks: tasksResult.ok ? (tasksResult.data ?? []) : [],
     schedules: schedulesResult.ok ? (schedulesResult.data ?? []) : []
   };

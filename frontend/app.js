@@ -37,7 +37,7 @@ angular.module('workend', [
       controller: 'calendarCtrl',
     })
     .when('/pr0t0', {
-      templateUrl: 'pr0t0/partials/index',
+      templateUrl: 'pr0t0/index',
       controller: 'pr0t0Controller',
     })
     .when('/login', {

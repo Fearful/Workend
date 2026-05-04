@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.24-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -18,7 +18,7 @@ FROM alpine:3.20 AS runtime
 # Pin the version explicitly to match the engine.
 ARG DAGGER_VERSION=0.13.7
 
-RUN apk add --no-cache ca-certificates tzdata curl && \
+RUN apk add --no-cache ca-certificates tzdata curl git && \
     curl -fsSL https://dl.dagger.io/dagger/install.sh | DAGGER_VERSION=${DAGGER_VERSION} BIN_DIR=/usr/local/bin sh && \
     apk del curl && \
     addgroup -S workend && adduser -S -G workend -u 10001 workend

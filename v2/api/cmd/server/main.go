@@ -14,6 +14,7 @@ import (
 	"workend/api/internal/db"
 	"workend/api/internal/detect"
 	"workend/api/internal/oauth"
+	"workend/api/internal/oidc"
 	"workend/api/internal/secret"
 	"workend/api/internal/server"
 )
@@ -46,7 +47,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	dc := wdagger.NewClient()
+	// The Dagger session must outlive any individual HTTP request, so we
+	// bind it to the main process context (cancelled on SIGTERM).
+	dc := wdagger.NewClient(ctx)
 	defer func() {
 		if err := dc.Close(); err != nil {
 			logger.Warn("dagger close", "err", err)
@@ -76,15 +79,21 @@ func main() {
 		logger.Error("oauth config load failed", "err", err)
 		os.Exit(1)
 	}
-	var oauthReg *oauth.Registry
-	if len(providers) > 0 {
-		if cfg.TokenKey == "" {
-			logger.Error("WORKEND_TOKEN_KEY required when any OAuth provider is configured")
-			os.Exit(1)
-		}
-		box, err := secret.NewBox(cfg.TokenKey)
+	// Build the secret box up-front whenever WORKEND_TOKEN_KEY is set; both
+	// OAuth tokens and SSH keys reuse it for at-rest encryption.
+	var box *secret.Box
+	if cfg.TokenKey != "" {
+		box, err = secret.NewBox(cfg.TokenKey)
 		if err != nil {
 			logger.Error("token key invalid", "err", err)
+			os.Exit(1)
+		}
+	}
+
+	var oauthReg *oauth.Registry
+	if len(providers) > 0 {
+		if box == nil {
+			logger.Error("WORKEND_TOKEN_KEY required when any OAuth provider is configured")
 			os.Exit(1)
 		}
 		oauthReg = oauth.NewRegistry(pool, box, providers)
@@ -95,7 +104,18 @@ func main() {
 		logger.Info("oauth providers configured", "providers", ids)
 	}
 
-	srv := server.New(cfg, pool, dc, oauthReg, logger)
+	var oidcDoc *oidc.DiscoveryDoc
+	if cfg.OIDCConfigured() {
+		var err error
+		oidcDoc, err = oidc.Discover(ctx, cfg.OIDCIssuer)
+		if err != nil {
+			logger.Error("oidc discovery failed", "issuer", cfg.OIDCIssuer, "err", err)
+			os.Exit(1)
+		}
+		logger.Info("oidc configured", "issuer", cfg.OIDCIssuer, "provider", cfg.OIDCProviderName)
+	}
+
+	srv := server.New(cfg, pool, dc, oauthReg, box, logger, oidcDoc)
 
 	stopScheduler := srv.Schedules().StartTicker(ctx, srv.Runs().EnqueueForUser)
 	defer stopScheduler()

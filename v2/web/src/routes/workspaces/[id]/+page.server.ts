@@ -36,15 +36,41 @@ interface Member {
   added_at: string;
 }
 
+interface ActivityEvent {
+  id: number;
+  occurred_at: string;
+  actor_id: string | null;
+  actor_name: string;
+  action: string;
+  target_kind: string;
+  target_id: string;
+  metadata?: unknown;
+}
+
+interface RecentIssue {
+  id: string;
+  project_id: string;
+  project_name: string;
+  provider_number: number;
+  title: string;
+  state: string;
+  labels: string[];
+  author_handle: string;
+  html_url: string;
+  upstream_updated_at: string | null;
+}
+
 export const load: PageServerLoad = async ({ params, locals, cookies }) => {
   if (!locals.user) throw redirect(303, '/login');
   const cookie = cookies.get(SESSION_COOKIE);
   const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
 
-  const [wsResp, projResp, membersResp] = await Promise.all([
+  const [wsResp, projResp, membersResp, activityResp, issuesResp] = await Promise.all([
     apiFetch<Workspace>(`/api/workspaces/${params.id}`, { cookie: cookieHeader }),
     apiFetch<Project[]>(`/api/workspaces/${params.id}/projects`, { cookie: cookieHeader }),
-    apiFetch<Member[]>(`/api/workspaces/${params.id}/members`, { cookie: cookieHeader })
+    apiFetch<Member[]>(`/api/workspaces/${params.id}/members`, { cookie: cookieHeader }),
+    apiFetch<ActivityEvent[]>(`/api/workspaces/${params.id}/activity?limit=30`, { cookie: cookieHeader }),
+    apiFetch<RecentIssue[]>(`/api/workspaces/${params.id}/recent-issues`, { cookie: cookieHeader })
   ]);
 
   if (wsResp.status === 404) throw error(404, 'workspace not found');
@@ -54,7 +80,9 @@ export const load: PageServerLoad = async ({ params, locals, cookies }) => {
     workspace: wsResp.data,
     projects: projResp.ok ? (projResp.data ?? []) : [],
     projectsError: projResp.ok ? null : (projResp.error || 'failed to load projects'),
-    members: membersResp.ok ? (membersResp.data ?? []) : []
+    members: membersResp.ok ? (membersResp.data ?? []) : [],
+    activity: activityResp.ok ? (activityResp.data ?? []) : [],
+    recentIssues: issuesResp.ok ? (issuesResp.data ?? []) : []
   };
 };
 
