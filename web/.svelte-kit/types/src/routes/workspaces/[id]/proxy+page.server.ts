@@ -1,0 +1,126 @@
+// @ts-nocheck
+import { error, fail, redirect } from '@sveltejs/kit';
+import type { PageServerLoad, Actions } from './$types';
+import { apiFetch } from '$lib/api';
+
+const SESSION_COOKIE = 'workend_session';
+
+interface Workspace {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  my_role: string;
+}
+
+interface Project {
+  id: string;
+  workspace_id: string;
+  name: string;
+  git_url: string;
+  default_branch: string | null;
+  status: string;
+  last_commit_sha: string | null;
+  last_commit_message: string | null;
+  last_commit_author: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Member {
+  user_id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  added_at: string;
+}
+
+interface ActivityEvent {
+  id: number;
+  occurred_at: string;
+  actor_id: string | null;
+  actor_name: string;
+  action: string;
+  target_kind: string;
+  target_id: string;
+  metadata?: unknown;
+}
+
+interface RecentIssue {
+  id: string;
+  project_id: string;
+  project_name: string;
+  provider_number: number;
+  title: string;
+  state: string;
+  labels: string[];
+  author_handle: string;
+  html_url: string;
+  upstream_updated_at: string | null;
+}
+
+export const load = async ({ params, locals, cookies }: Parameters<PageServerLoad>[0]) => {
+  if (!locals.user) throw redirect(303, '/login');
+  const cookie = cookies.get(SESSION_COOKIE);
+  const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
+
+  const [wsResp, projResp, membersResp, activityResp, issuesResp] = await Promise.all([
+    apiFetch<Workspace>(`/api/workspaces/${params.id}`, { cookie: cookieHeader }),
+    apiFetch<Project[]>(`/api/workspaces/${params.id}/projects`, { cookie: cookieHeader }),
+    apiFetch<Member[]>(`/api/workspaces/${params.id}/members`, { cookie: cookieHeader }),
+    apiFetch<ActivityEvent[]>(`/api/workspaces/${params.id}/activity?limit=30`, { cookie: cookieHeader }),
+    apiFetch<RecentIssue[]>(`/api/workspaces/${params.id}/recent-issues`, { cookie: cookieHeader })
+  ]);
+
+  if (wsResp.status === 404) throw error(404, 'workspace not found');
+  if (!wsResp.ok || !wsResp.data) throw error(500, wsResp.error || 'failed to load workspace');
+
+  return {
+    workspace: wsResp.data,
+    projects: projResp.ok ? (projResp.data ?? []) : [],
+    projectsError: projResp.ok ? null : (projResp.error || 'failed to load projects'),
+    members: membersResp.ok ? (membersResp.data ?? []) : [],
+    activity: activityResp.ok ? (activityResp.data ?? []) : [],
+    recentIssues: issuesResp.ok ? (issuesResp.data ?? []) : []
+  };
+};
+
+export const actions = {
+  delete: async ({ params, cookies }: import('./$types').RequestEvent) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const result = await apiFetch(`/api/workspaces/${params.id}`, {
+      method: 'DELETE',
+      cookie: cookie ? `${SESSION_COOKIE}=${cookie}` : undefined
+    });
+    if (!result.ok) throw error(result.status, result.error || 'delete failed');
+    throw redirect(303, '/');
+  },
+  addMember: async ({ params, request, cookies }: import('./$types').RequestEvent) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const data = await request.formData();
+    const email = String(data.get('email') || '').trim();
+    const role = String(data.get('role') || 'member');
+    if (!email) return fail(400, { memberError: 'email required', email });
+    const result = await apiFetch(`/api/workspaces/${params.id}/members`, {
+      method: 'POST',
+      body: { email, role },
+      cookie: cookie ? `${SESSION_COOKIE}=${cookie}` : undefined
+    });
+    if (!result.ok) return fail(result.status, { memberError: result.error || 'add failed', email });
+    return { memberAdded: true };
+  },
+  removeMember: async ({ params, request, cookies }: import('./$types').RequestEvent) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const userID = String((await request.formData()).get('user_id') || '');
+    if (!userID) return fail(400, { memberError: 'user_id required' });
+    const result = await apiFetch(`/api/workspaces/${params.id}/members/${userID}`, {
+      method: 'DELETE',
+      cookie: cookie ? `${SESSION_COOKIE}=${cookie}` : undefined
+    });
+    if (!result.ok) return fail(result.status, { memberError: result.error || 'remove failed' });
+    return { memberRemoved: true };
+  }
+};
+;null as any as Actions;

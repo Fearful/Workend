@@ -1,0 +1,134 @@
+{
+	"/": [
+		"src/routes/+page.server.ts",
+		"src/routes/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/admin": [
+		"src/routes/admin/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/auth/[provider]/callback": [
+		"src/routes/auth/[provider]/callback/+server.ts"
+	],
+	"/auth/[provider]/start": [
+		"src/routes/auth/[provider]/start/+server.ts"
+	],
+	"/dashboard": [
+		"src/routes/dashboard/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/dockscope": [
+		"src/routes/+layout.server.ts"
+	],
+	"/issues/[id]": [
+		"src/routes/issues/[id]/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/issues/[id]/move": [
+		"src/routes/issues/[id]/move/+server.ts"
+	],
+	"/login": [
+		"src/routes/login/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/logout": [
+		"src/routes/logout/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/mentions": [
+		"src/routes/mentions/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/otel": [
+		"src/routes/+layout.server.ts"
+	],
+	"/pipeline-runs/[id]": [
+		"src/routes/pipeline-runs/[id]/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/projects/[id]": [
+		"src/routes/projects/[id]/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/projects/[id]/board": [
+		"src/routes/projects/[id]/board/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/projects/[id]/branches": [
+		"src/routes/projects/[id]/branches/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/projects/[id]/images": [
+		"src/routes/projects/[id]/images/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/projects/[id]/pipelines": [
+		"src/routes/projects/[id]/pipelines/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/projects/[id]/runs": [
+		"src/routes/projects/[id]/runs/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/projects/[id]/schedules": [
+		"src/routes/projects/[id]/schedules/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/projects/[id]/trends": [
+		"src/routes/projects/[id]/trends/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/runs/[id]": [
+		"src/routes/runs/[id]/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/runs/[id]/cancel": [
+		"src/routes/runs/[id]/cancel/+server.ts"
+	],
+	"/runs/[id]/compare/[other]": [
+		"src/routes/runs/[id]/compare/[other]/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/runs/[id]/log-stream": [
+		"src/routes/runs/[id]/log-stream/+server.ts"
+	],
+	"/settings": [
+		"src/routes/settings/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/settings/notifications": [
+		"src/routes/settings/notifications/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/signup": [
+		"src/routes/signup/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/workspaces/new": [
+		"src/routes/workspaces/new/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/workspaces/[id]": [
+		"src/routes/workspaces/[id]/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/workspaces/[id]/dashboard": [
+		"src/routes/workspaces/[id]/dashboard/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/workspaces/[id]/projects/new": [
+		"src/routes/workspaces/[id]/projects/new/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	]
+}
