@@ -4,9 +4,9 @@ Self-hosted, browser-based developer workstation.
 
 Pick a git repo, see what's runnable in it, run those tasks reproducibly in isolated containers, watch the output live, schedule them, build images from Dockerfiles, get notified on failures, keep a log of every run.
 
-## Status: v0.6.0
+## Status: v0.7.0
 
-Stages 0–22 + 24–28 of [PLAN.md](PLAN.md) are complete (Stage 23 — true incremental log streaming — is deliberately deferred). The system handles multi-user shared workspaces across multiple OAuth providers, with HMAC-verified webhooks, per-user disk quotas, lazy token refresh on both expiry and 401, and a scheduler safe to run on multiple replicas.
+All planned stages are complete (Stage 23 — true incremental log streaming — is deliberately deferred). The system handles multi-user shared workspaces across multiple OAuth providers, with task pipelines, outbound webhooks, Web Push, secret scanning, SBOM generation, dependency parsing, resource usage tracking, CI integration, HMAC-verified webhooks, per-user disk quotas, lazy token refresh, and a scheduler safe to run on multiple replicas.
 
 See [OBJECTIVE.md](OBJECTIVE.md) for vision, [PLAN.md](PLAN.md) for the staged build plan, [ARCHITECTURE.md](ARCHITECTURE.md) for technical design.
 
@@ -42,6 +42,8 @@ All optional — Workend works fine without them.
 | `WORKEND_GITHUB_CLIENT_ID` + `_SECRET` + `WORKEND_TOKEN_KEY` | GitHub OAuth → private repo cloning |
 | `WORKEND_WEB_PUBLIC_URL` | Run-detail link in notifications (defaults to localhost:3000) |
 | `WORKEND_SMTP_HOST/_FROM/_USERNAME/_PASSWORD` | Email notifications |
+| `WORKEND_VAPID_PUBLIC` + `_PRIVATE` + `_SUBJECT` | Web Push notifications |
+| `WORKEND_OIDC_ISSUER` + `_CLIENT_ID` + `_CLIENT_SECRET` | OIDC SSO login |
 
 `WORKEND_TOKEN_KEY` is a base64-encoded 32-byte key for at-rest encryption of stored OAuth tokens. Generate with:
 
@@ -49,7 +51,7 @@ All optional — Workend works fine without them.
 openssl rand -base64 32
 ```
 
-## What's in v0.5.0
+## What's in v0.7.0
 
 **Core (Stages 0–7, MVP)**
 - Local password auth (argon2id), session cookies
@@ -85,21 +87,27 @@ openssl rand -base64 32
 - Lazy-on-401 token refresh (in addition to lazy-on-expiry from Stage 15)
 - Multi-instance-safe scheduler (`SELECT ... FOR UPDATE SKIP LOCKED`)
 
+**Pipelines, security & integrations (post-Stage 28)**
+- Task pipelines: ordered task chains that short-circuit on first failure
+- Resource usage capture: CPU, memory, network I/O per run via cgroup stats
+- Dependency parsing: npm, Go, Cargo, PyPI lockfiles into a searchable table
+- Secret scanning: gitleaks integration with fingerprint tracking + auto-resolve
+- SBOM generation: syft SPDX-JSON for built images
+- Web Push: VAPID-based browser push notifications (background delivery)
+- Outbound webhooks: HMAC-SHA256 signed event payloads for external automation
+- GitHub/GitLab/Gitea CI: trigger remote workflows + sync pipeline run status
+- CI config detection: auto-detect GitHub Actions, GitLab CI, Jenkins, CircleCI configs
+
 ## What's not here
 
 - Bitbucket OAuth (the extension point exists — implement the `oauth.Provider` interface)
 - Image push to a registry (local builds only; runs record digest + size)
-- Discord / Teams notification channels
+- VS Code / JetBrains extensions (planned as out-of-tree sub-projects)
 - True line-by-line live log streaming (see "Honest limitations")
-- Provider webhook signature verification (token-in-URL is the auth)
-- Per-user disk quotas (concurrent-run limit is enforced; disk is not)
-- Repo browser search / filter (paging only)
 
-## Honest limitations in v0.6.0
+## Honest limitations in v0.7.0
 
 - **Live log streaming is structurally complete but materially batched.** Dagger v0.13's `container.Stdout()` only returns once the container exits. SSE plumbing is correct; expect a single large delivery at completion. Stage 23 — the runner rewrite that fixes this — is deliberately deferred.
-- **Re-run uses current repo HEAD**, not the original run's commit.
-- **Image build size is not reported.** Without a registry to inspect against, the size we'd report would be the exported tarball size.
 - **Self-signed TLS on self-hosted Gitea/GitLab** isn't supported out of the box — Workend's HTTP client doesn't bundle custom CAs. Mount one into the api container if you need it.
 - **Repo browser search is page-local.** Filter applies only to the currently loaded page (50 repos at a time).
 - **Disk-quota check walks the filesystem on every clone.** Fine for small repo counts; consider caching if you have hundreds of projects.
@@ -125,26 +133,40 @@ v2/
 │   ├── cmd/server/main.go
 │   ├── internal/
 │   │   ├── admin/       admin endpoints + RequireAdmin middleware
+│   │   ├── artifact/    run artifact capture + download
 │   │   ├── audit/       best-effort audit-log writer
 │   │   ├── auth/        password, sessions, signup/login/logout
+│   │   ├── board/       issue board (kanban + upstream sync)
+│   │   ├── cidetect/    CI config detection (Actions, GitLab CI, etc.)
+│   │   ├── comment/     run comments + @mentions
+│   │   ├── compose/     Docker Compose lifecycle
 │   │   ├── config/      env-driven config
 │   │   ├── dagger/      lazy SDK client wrapper
 │   │   ├── dashboard/   per-project health aggregation
 │   │   ├── db/          pgx pool + embedded goose migrations
-│   │   ├── detect/      task autodetection (npm, just, dockerfile)
+│   │   ├── deps/        lockfile dependency parsing
+│   │   ├── detect/      task autodetection (npm, just, dockerfile, custom)
+│   │   ├── diff/        run-to-run diff
+│   │   ├── events/      outbound webhooks (HMAC-signed)
 │   │   ├── health/      /healthz
 │   │   ├── image/       built-image listing
-│   │   ├── notify/      webhook/slack/email dispatcher
-│   │   ├── oauth/       GitHub OAuth flow
+│   │   ├── notify/      webhook/slack/email/discord/teams dispatcher
+│   │   ├── oauth/       GitHub/GitLab/Gitea OAuth
+│   │   ├── oidc/        OIDC SSO
+│   │   ├── pipeline/    task pipelines (sequential chaining)
 │   │   ├── project/     project CRUD + clone-async pipeline
+│   │   ├── push/        Web Push (VAPID)
+│   │   ├── quota/       per-user disk quotas
+│   │   ├── remoteci/    remote CI trigger + sync
 │   │   ├── repo/        Dagger-based git clone
-│   │   ├── run/         task execution + SSE log streaming + image builds
+│   │   ├── run/         task execution + SSE + image builds + scan + SBOM
 │   │   ├── schedule/    cron schedules + ticker goroutine
 │   │   ├── secret/      NaCl secretbox wrapper
+│   │   ├── secscan/     secret scanning (gitleaks)
 │   │   ├── server/      chi router wiring
 │   │   ├── stats/       tokei-driven code stats
 │   │   ├── task/        task listing
-│   │   └── workspace/   workspace CRUD
+│   │   └── workspace/   workspace CRUD + sharing
 │   └── Dockerfile       multi-stage; installs dagger CLI
 ├── web/                 SvelteKit, Node adapter
 ├── compose.yaml         four services: web, api, db, dagger-engine
