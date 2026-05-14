@@ -48,8 +48,8 @@ function freshnessClass(iso) {
 }
 export {
   statusColor as a,
-  freshnessClass as b,
+  formatRelative as b,
   formatDuration as c,
-  formatRelative as f,
+  freshnessClass as f,
   shortSha as s
 };

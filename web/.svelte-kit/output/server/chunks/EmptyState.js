@@ -1,5 +1,4 @@
 import { e as escape_html, a as attr } from "./renderer.js";
-/* empty css                                         */
 function EmptyState($$renderer, $$props) {
   let { icon, message, actionHref, actionLabel, children } = $$props;
   $$renderer.push(`<div class="empty svelte-13862ru">`);

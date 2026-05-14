@@ -49,6 +49,26 @@ interface ProjectHealth {
   runs_in_window: number;
 }
 
+interface ProjectStorage {
+  project_id: string;
+  project_name: string;
+  bytes: number;
+}
+
+interface DiskInfo {
+  total_bytes: number;
+  free_bytes: number;
+  used_bytes: number;
+  available_bytes: number;
+}
+
+interface StorageInfo {
+  quota_bytes: number;
+  used_bytes: number;
+  projects: ProjectStorage[];
+  disk: DiskInfo;
+}
+
 interface WorkspaceSummary {
   workspace_id: string;
   window_days: number;
@@ -60,6 +80,7 @@ interface WorkspaceSummary {
     success_rate: number;
     active_now: number;
   };
+  storage: StorageInfo;
   slowest_tasks: SlowTask[];
   failing_tasks: FailingTask[];
   daily_runs: DayBucket[];

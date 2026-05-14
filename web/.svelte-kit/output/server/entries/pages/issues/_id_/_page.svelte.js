@@ -1,5 +1,5 @@
 import { e as escape_html, a as attr, c as ensure_array_like } from "../../../../chunks/renderer.js";
-import { f as formatRelative } from "../../../../chunks/utils2.js";
+import { b as formatRelative } from "../../../../chunks/utils2.js";
 import { P as Panel } from "../../../../chunks/Panel.js";
 import { B as Badge } from "../../../../chunks/Badge.js";
 import { F as FlashMessage } from "../../../../chunks/FlashMessage.js";

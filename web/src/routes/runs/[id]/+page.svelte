@@ -9,12 +9,62 @@
   import LogViewer from '$lib/components/LogViewer.svelte';
   import TimeAgo from '$lib/components/TimeAgo.svelte';
   import Tooltip from '$lib/components/Tooltip.svelte';
+  import Modal from '$lib/components/Modal.svelte';
 
   let { data, form } = $props();
   let commentDraft = $state('');
   $effect(() => {
     if (form?.commentDraft) commentDraft = form.commentDraft;
   });
+
+  // Sharing state
+  let showShareModal = $state(false);
+  let shareCopied = $state<string | null>(null);
+
+  function shareUrl(token: string): string {
+    if (typeof window === 'undefined') return token;
+    return `${window.location.origin}/runs/${data.run.id}?share=${token}`;
+  }
+
+  async function copyShareLink(token: string) {
+    const url = shareUrl(token);
+    try {
+      await navigator.clipboard?.writeText(url);
+      shareCopied = token;
+      setTimeout(() => { shareCopied = null; }, 2000);
+    } catch {
+      // ignore
+    }
+  }
+
+  // Signing state
+  let showSignModal = $state(false);
+  let showProvenanceModal = $state(false);
+  let provenanceJson = $state<string | null>(null);
+  let provenanceLoading = $state(false);
+
+  async function loadProvenance() {
+    provenanceLoading = true;
+    provenanceJson = null;
+    try {
+      const r = await fetch(`/api/runs/${data.run.id}/provenance`, { credentials: 'same-origin' });
+      if (r.ok) {
+        const j = await r.json();
+        provenanceJson = JSON.stringify(j, null, 2);
+      } else {
+        provenanceJson = `Error: HTTP ${r.status}`;
+      }
+    } catch (err) {
+      provenanceJson = `Error: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      provenanceLoading = false;
+    }
+  }
+
+  function openProvenance() {
+    showProvenanceModal = true;
+    loadProvenance();
+  }
 
   function bodyParts(body: string): { text: string; mention: boolean }[] {
     const parts: { text: string; mention: boolean }[] = [];
@@ -386,6 +436,119 @@
     justify-content: flex-end;
     margin-top: var(--space-2);
   }
+
+  /* Sharing styles */
+  .share-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: var(--space-2);
+    align-items: center;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--fs-sm);
+  }
+  .share-row:last-child { border-bottom: none; }
+  .share-token {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text);
+    word-break: break-all;
+  }
+  .share-meta {
+    color: var(--text-dim);
+    font-size: var(--fs-xs);
+    white-space: nowrap;
+  }
+  .share-actions {
+    display: flex;
+    gap: var(--space-1);
+  }
+  .share-actions button {
+    padding: 0.25rem 0.5rem;
+    font-size: var(--fs-xs);
+  }
+  .copy-ok {
+    color: var(--success);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+  }
+  .empty-shares {
+    color: var(--text-dim);
+    font-size: var(--fs-sm);
+    padding: var(--space-2) 0;
+  }
+
+  /* Signing styles */
+  .verification-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+  }
+  .verification-badge.verified {
+    background: var(--status-success-bg);
+    color: var(--status-success-fg);
+    border: 1px solid var(--status-success-border);
+  }
+  .verification-badge.unverified {
+    background: var(--status-danger-bg);
+    color: var(--status-danger-fg);
+    border: 1px solid var(--status-danger-border);
+  }
+  .sign-detail-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    font-size: var(--fs-sm);
+  }
+  .sign-detail-label { color: var(--text-dim); }
+  .sign-detail-value {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text);
+    word-break: break-all;
+  }
+  .sign-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+
+  /* Modal shared */
+  .modal-error {
+    color: var(--danger-text);
+    font-size: 0.875rem;
+    margin: 0 0 var(--space-3) 0;
+  }
+  .modal-actions {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    margin-top: var(--space-4);
+  }
+  .modal-hint {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    margin: 0.25rem 0 0 0;
+  }
+  .provenance-pre {
+    background: #0d0f12;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    line-height: 1.5;
+    color: var(--text);
+    max-height: 400px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
 </style>
 
 <Breadcrumb segments={[
@@ -572,5 +735,139 @@
         </div>
       {/if}
     </Panel>
+
+    <!-- Sharing Panel -->
+    <Panel title="Sharing">
+      {#snippet actions()}
+        <button type="button" class="ghost" style="padding: 0.25rem 0.5rem; font-size: var(--fs-xs);"
+                onclick={() => (showShareModal = true)}>
+          Share
+        </button>
+      {/snippet}
+      {#if data.shares.length === 0}
+        <div class="empty-shares">No share links. Click Share to generate one.</div>
+      {:else}
+        {#each data.shares as s (s.id)}
+          <div class="share-row">
+            <span class="share-token">{s.token.slice(0, 16)}...</span>
+            <span class="share-meta">expires <TimeAgo value={s.expires_at} /></span>
+            <div class="share-actions">
+              {#if shareCopied === s.token}
+                <span class="copy-ok">Copied</span>
+              {:else}
+                <button type="button" class="ghost" onclick={() => copyShareLink(s.token)}>Copy</button>
+              {/if}
+              <form method="POST" action="?/revokeShare" class="inline-form">
+                <input type="hidden" name="share_id" value={s.id} />
+                <button type="submit" class="ghost" title="Revoke this link" style="color: var(--danger-text);">Revoke</button>
+              </form>
+            </div>
+          </div>
+        {/each}
+      {/if}
+      {#if form?.shareError}
+        <p class="modal-error" style="margin-top: var(--space-2);">{form.shareError}</p>
+      {/if}
+    </Panel>
+
+    <!-- Signing Panel (only for terminal runs) -->
+    {#if isTerminal(liveStatus)}
+      <Panel title="Signing">
+        {#if data.verification}
+          <div style="margin-bottom: var(--space-3);">
+            {#if data.verification.verified}
+              <span class="verification-badge verified">Verified</span>
+            {:else}
+              <span class="verification-badge unverified">Unverified</span>
+            {/if}
+          </div>
+          <div class="sign-detail-row">
+            <span class="sign-detail-label">Key ID</span>
+            <span class="sign-detail-value">{data.verification.key_id}</span>
+          </div>
+          <div class="sign-detail-row">
+            <span class="sign-detail-label">Signature</span>
+            <span class="sign-detail-value">{data.verification.signature.slice(0, 32)}...</span>
+          </div>
+          <div class="sign-detail-row">
+            <span class="sign-detail-label">Signed</span>
+            <span class="sign-detail-value"><TimeAgo value={data.verification.signed_at} /></span>
+          </div>
+          <div class="sign-actions">
+            <button type="button" class="ghost" onclick={openProvenance}>View Provenance</button>
+          </div>
+        {:else}
+          <div class="empty-shares">This run has not been signed.</div>
+          <div class="sign-actions">
+            <button type="button" onclick={() => (showSignModal = true)}>Sign Run</button>
+            <button type="button" class="ghost" onclick={openProvenance}>View Provenance</button>
+          </div>
+        {/if}
+        {#if form?.signError}
+          <p class="modal-error" style="margin-top: var(--space-2);">{form.signError}</p>
+        {/if}
+      </Panel>
+    {/if}
   </div>
 </div>
+
+<!-- Share Modal -->
+<Modal open={showShareModal} title="Share Run" width={440} onClose={() => (showShareModal = false)}>
+  <form method="POST" action="?/share" onsubmit={() => { showShareModal = false; }}>
+    <p style="color: var(--text-muted); font-size: var(--fs-sm); margin: 0 0 var(--space-3) 0;">
+      Generate a shareable link for this run. Anyone with the link can view the run details and log.
+    </p>
+    <div class="field">
+      <label for="share-expires">Link expiry (hours)</label>
+      <input id="share-expires" name="expires_hours" type="number" min="1" max="720" value="168" />
+      <p class="modal-hint">1-720 hours (default 168 = 7 days). Leave blank for server default.</p>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="ghost" onclick={() => (showShareModal = false)}>Cancel</button>
+      <button type="submit">Generate Link</button>
+    </div>
+  </form>
+</Modal>
+
+<!-- Sign Modal -->
+<Modal open={showSignModal} title="Sign Run" width={520} onClose={() => (showSignModal = false)}>
+  <form method="POST" action="?/sign" onsubmit={() => { showSignModal = false; }}>
+    <p style="color: var(--text-muted); font-size: var(--fs-sm); margin: 0 0 var(--space-3) 0;">
+      Cryptographically sign this run to create an immutable provenance record. The signature proves this run was reviewed and approved.
+    </p>
+    <div class="field">
+      <label for="sign-key-id">Key ID</label>
+      <input id="sign-key-id" name="key_id" type="text" required placeholder="e.g. my-signing-key-2026" />
+      <p class="modal-hint">Identifier for the signing key.</p>
+    </div>
+    <div class="field">
+      <label for="sign-private-key">Private Key</label>
+      <textarea id="sign-private-key" name="private_key" rows="6" required
+                placeholder="Paste your PEM-encoded private key..."
+                style="font-family: var(--font-mono); font-size: var(--fs-xs);"></textarea>
+      <p class="modal-hint">Your private key is sent to the server for signing and is not stored.</p>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="ghost" onclick={() => (showSignModal = false)}>Cancel</button>
+      <button type="submit">Sign</button>
+    </div>
+  </form>
+</Modal>
+
+<!-- Provenance Modal -->
+<Modal open={showProvenanceModal} title="SLSA Provenance" width={640} onClose={() => (showProvenanceModal = false)}>
+  {#if provenanceLoading}
+    <div style="color: var(--text-dim); font-style: italic; padding: var(--space-4) 0; text-align: center;">
+      Loading provenance...
+    </div>
+  {:else if provenanceJson}
+    <pre class="provenance-pre">{provenanceJson}</pre>
+  {:else}
+    <div style="color: var(--text-dim); font-style: italic; padding: var(--space-4) 0; text-align: center;">
+      No provenance data available.
+    </div>
+  {/if}
+  {#snippet footer()}
+    <button type="button" class="ghost" onclick={() => (showProvenanceModal = false)}>Close</button>
+  {/snippet}
+</Modal>

@@ -1,4 +1,4 @@
-import { e as escape_html, c as ensure_array_like, b as attr_class, s as stringify, a as attr } from "../../../../../chunks/renderer.js";
+import { a as attr, e as escape_html, c as ensure_array_like, b as attr_class, s as stringify, d as derived } from "../../../../../chunks/renderer.js";
 import "@sveltejs/kit/internal";
 import "../../../../../chunks/exports.js";
 import "../../../../../chunks/utils.js";
@@ -10,6 +10,8 @@ import { B as Badge } from "../../../../../chunks/Badge.js";
 import { F as FlashMessage } from "../../../../../chunks/FlashMessage.js";
 import { M as Modal } from "../../../../../chunks/Modal.js";
 import { E as EmptyState } from "../../../../../chunks/EmptyState.js";
+import { S as SectionHeader } from "../../../../../chunks/SectionHeader.js";
+import { T as Tooltip } from "../../../../../chunks/Tooltip.js";
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
     let { data, form } = $$props;
@@ -18,10 +20,30 @@ function _page($$renderer, $$props) {
     let prModal = null;
     let switchModal = null;
     let switchPending = false;
+    let filter = "";
+    let showBots = false;
+    function isBot(name) {
+      return name.startsWith("dependabot/") || name.startsWith("renovate/");
+    }
+    let filteredBranches = derived(() => {
+      const q = filter.trim().toLowerCase();
+      return data.branches.filter((b) => {
+        if (q && !b.name.toLowerCase().includes(q)) return false;
+        if (!q && isBot(b.name)) return false;
+        return true;
+      });
+    });
+    let botCount = derived(() => data.branches.filter((b) => isBot(b.name)).length);
     function shortSha$1(sha) {
       return shortSha(sha, 8);
     }
-    $$renderer2.push(`<h2 class="section-title svelte-wtiglm">Branches <span class="source-pill svelte-wtiglm">${escape_html(data.branchesSource === "provider" ? "OAuth" : "ls-remote")}</span></h2> <p class="hint svelte-wtiglm">Click a branch to switch the project to it (re-clones in the background). `);
+    {
+      let actions = function($$renderer3) {
+        $$renderer3.push(`<span class="source-pill svelte-wtiglm">${escape_html(data.branchesSource === "provider" ? "OAuth" : "ls-remote")}</span>`);
+      };
+      SectionHeader($$renderer2, { title: "Branches", actions });
+    }
+    $$renderer2.push(`<!----> <p class="hint svelte-wtiglm">Click a branch to switch the project to it (re-clones in the background). `);
     if (data.canCreatePR) {
       $$renderer2.push("<!--[0-->");
       $$renderer2.push(`Drag a branch onto another to open a pull/merge request from source → target.`);
@@ -69,14 +91,24 @@ function _page($$renderer, $$props) {
     } else {
       $$renderer2.push("<!--[-1-->");
     }
-    $$renderer2.push(`<!--]--> <section class="branch-list svelte-wtiglm">`);
+    $$renderer2.push(`<!--]--> <div class="filter-bar svelte-wtiglm"><input type="search" class="filter-input svelte-wtiglm" placeholder="Filter branches…"${attr("value", filter)}/> `);
+    if (botCount() > 0 && !filter.trim()) {
+      $$renderer2.push("<!--[0-->");
+      $$renderer2.push(`<label class="show-bots svelte-wtiglm"><input type="checkbox"${attr("checked", showBots, true)} class="svelte-wtiglm"/> <span>Show ${escape_html(botCount())} bot branches</span></label>`);
+    } else {
+      $$renderer2.push("<!--[-1-->");
+    }
+    $$renderer2.push(`<!--]--> <span class="count svelte-wtiglm">${escape_html(filteredBranches().length)} of ${escape_html(data.branches.length)}</span></div> <section class="branch-list svelte-wtiglm">`);
     if (data.branches.length === 0) {
       $$renderer2.push("<!--[0-->");
       EmptyState($$renderer2, { message: "No branches found." });
+    } else if (filteredBranches().length === 0) {
+      $$renderer2.push("<!--[1-->");
+      EmptyState($$renderer2, { message: "No branches match." });
     } else {
       $$renderer2.push("<!--[-1-->");
       $$renderer2.push(`<!--[-->`);
-      const each_array = ensure_array_like(data.branches);
+      const each_array = ensure_array_like(filteredBranches());
       for (let $$index = 0, $$length = each_array.length; $$index < $$length; $$index++) {
         let b = each_array[$$index];
         $$renderer2.push(`<div${attr_class(`branch-row ${stringify(dragName === b.name ? "dragging" : "")} ${stringify(dropName === b.name ? "drop-target" : "")}`, "svelte-wtiglm")} draggable="true" role="button" tabindex="0"><span class="grip svelte-wtiglm" aria-hidden="true">⋮⋮</span> <span class="name svelte-wtiglm">${escape_html(b.name)}</span> `);
@@ -107,7 +139,14 @@ function _page($$renderer, $$props) {
           $$renderer2.push("<!--[-1-->");
           $$renderer2.push(`<span class="svelte-wtiglm"></span>`);
         }
-        $$renderer2.push(`<!--]--> <span class="sha svelte-wtiglm">${escape_html(shortSha$1(b.commit_sha))}</span></div>`);
+        $$renderer2.push(`<!--]--> `);
+        Tooltip($$renderer2, {
+          text: b.commit_sha,
+          children: ($$renderer3) => {
+            $$renderer3.push(`<span class="sha svelte-wtiglm">${escape_html(shortSha$1(b.commit_sha))}</span>`);
+          }
+        });
+        $$renderer2.push(`<!----></div>`);
       }
       $$renderer2.push(`<!--]-->`);
     }

@@ -30,7 +30,7 @@ services:
       - "5432"
 
   dagger-engine:
-    image: registry.dagger.io/engine:v0.13.7
+    image: registry.dagger.io/engine:v0.20.5
     restart: unless-stopped
     privileged: true
     volumes:

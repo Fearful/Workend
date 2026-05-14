@@ -41,6 +41,7 @@ declare module '$env/static/private' {
 	export const CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES: string;
 	export const CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL: string;
 	export const NoDefaultCurrentDirectoryInExePath: string;
+	export const CLAUDE_EFFORT: string;
 	export const CLAUDE_CODE_ENTRYPOINT: string;
 	export const NODE: string;
 	export const INIT_CWD: string;
@@ -53,7 +54,6 @@ declare module '$env/static/private' {
 	export const COLOR: string;
 	export const CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: string;
 	export const USE_LOCAL_OAUTH: string;
-	export const DEFAULT_LLM_MODEL: string;
 	export const npm_config_noproxy: string;
 	export const CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH: string;
 	export const npm_config_local_prefix: string;
@@ -70,7 +70,7 @@ declare module '$env/static/private' {
 	export const PATH: string;
 	export const MCP_CONNECTION_NONBLOCKING: string;
 	export const npm_package_json: string;
-	export const OPERON_SANDBOXED_NETWORK: string;
+	export const _: string;
 	export const npm_config_userconfig: string;
 	export const npm_config_init_module: string;
 	export const __CFBundleIdentifier: string;
@@ -78,7 +78,6 @@ declare module '$env/static/private' {
 	export const PWD: string;
 	export const npm_lifecycle_event: string;
 	export const EDITOR: string;
-	export const OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: string;
 	export const npm_package_name: string;
 	export const npm_config_npm_version: string;
 	export const NODE_USE_SYSTEM_CA: string;
@@ -92,20 +91,19 @@ declare module '$env/static/private' {
 	export const CLAUDE_CODE_DISABLE_CRON: string;
 	export const ANTHROPIC_BASE_URL: string;
 	export const CLAUDE_CODE_EXECPATH: string;
-	export const CLAUDE_CODE_CLASSIFIER_SUMMARY: string;
 	export const DISABLE_MICROCOMPACT: string;
 	export const npm_config_cache: string;
 	export const LOGNAME: string;
 	export const npm_lifecycle_script: string;
 	export const COREPACK_ENABLE_AUTO_PIN: string;
 	export const npm_config_user_agent: string;
+	export const CLAUDE_CODE_SESSION_ID: string;
 	export const DISABLE_AUTOUPDATER: string;
 	export const OSLogRateLimit: string;
 	export const CLAUDECODE: string;
 	export const npm_node_execpath: string;
 	export const npm_config_prefix: string;
 	export const USE_STAGING_OAUTH: string;
-	export const _: string;
 	export const NODE_ENV: string;
 }
 
@@ -196,6 +194,7 @@ declare module '$env/dynamic/private' {
 		CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES: string;
 		CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL: string;
 		NoDefaultCurrentDirectoryInExePath: string;
+		CLAUDE_EFFORT: string;
 		CLAUDE_CODE_ENTRYPOINT: string;
 		NODE: string;
 		INIT_CWD: string;
@@ -208,7 +207,6 @@ declare module '$env/dynamic/private' {
 		COLOR: string;
 		CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: string;
 		USE_LOCAL_OAUTH: string;
-		DEFAULT_LLM_MODEL: string;
 		npm_config_noproxy: string;
 		CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH: string;
 		npm_config_local_prefix: string;
@@ -225,7 +223,7 @@ declare module '$env/dynamic/private' {
 		PATH: string;
 		MCP_CONNECTION_NONBLOCKING: string;
 		npm_package_json: string;
-		OPERON_SANDBOXED_NETWORK: string;
+		_: string;
 		npm_config_userconfig: string;
 		npm_config_init_module: string;
 		__CFBundleIdentifier: string;
@@ -233,7 +231,6 @@ declare module '$env/dynamic/private' {
 		PWD: string;
 		npm_lifecycle_event: string;
 		EDITOR: string;
-		OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: string;
 		npm_package_name: string;
 		npm_config_npm_version: string;
 		NODE_USE_SYSTEM_CA: string;
@@ -247,20 +244,19 @@ declare module '$env/dynamic/private' {
 		CLAUDE_CODE_DISABLE_CRON: string;
 		ANTHROPIC_BASE_URL: string;
 		CLAUDE_CODE_EXECPATH: string;
-		CLAUDE_CODE_CLASSIFIER_SUMMARY: string;
 		DISABLE_MICROCOMPACT: string;
 		npm_config_cache: string;
 		LOGNAME: string;
 		npm_lifecycle_script: string;
 		COREPACK_ENABLE_AUTO_PIN: string;
 		npm_config_user_agent: string;
+		CLAUDE_CODE_SESSION_ID: string;
 		DISABLE_AUTOUPDATER: string;
 		OSLogRateLimit: string;
 		CLAUDECODE: string;
 		npm_node_execpath: string;
 		npm_config_prefix: string;
 		USE_STAGING_OAUTH: string;
-		_: string;
 		NODE_ENV: string;
 		[key: `PUBLIC_${string}`]: undefined;
 		[key: `${string}`]: string | undefined;

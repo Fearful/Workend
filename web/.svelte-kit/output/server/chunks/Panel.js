@@ -1,4 +1,5 @@
 import { b as attr_class, e as escape_html, s as stringify } from "./renderer.js";
+/* empty css                                    */
 function Panel($$renderer, $$props) {
   let { title, actions, padding = "normal", children } = $$props;
   $$renderer.push(`<section${attr_class(`panel padding-${stringify(padding)}`, "svelte-hxsa5u")}>`);

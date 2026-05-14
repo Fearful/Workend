@@ -1,5 +1,5 @@
 import { c as ensure_array_like, a as attr, b as attr_class, s as stringify, e as escape_html } from "../../../chunks/renderer.js";
-import { f as formatRelative } from "../../../chunks/utils2.js";
+import { b as formatRelative } from "../../../chunks/utils2.js";
 import { P as PageHeader } from "../../../chunks/PageHeader.js";
 import { E as EmptyState } from "../../../chunks/EmptyState.js";
 function _page($$renderer, $$props) {

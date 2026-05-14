@@ -1,13 +1,14 @@
-import { e as escape_html, c as ensure_array_like, b as attr_class, s as stringify, a as attr, d as derived, f as attr_style } from "../../../../../chunks/renderer.js";
+import { c as ensure_array_like, b as attr_class, s as stringify, a as attr, e as escape_html, d as derived, f as attr_style } from "../../../../../chunks/renderer.js";
 import "@sveltejs/kit/internal";
 import "../../../../../chunks/exports.js";
 import "../../../../../chunks/utils.js";
 import "@sveltejs/kit/internal/server";
 import "../../../../../chunks/root.js";
 import "../../../../../chunks/state.svelte.js";
-import { f as formatRelative } from "../../../../../chunks/utils2.js";
 import { P as Panel } from "../../../../../chunks/Panel.js";
 import { F as FlashMessage } from "../../../../../chunks/FlashMessage.js";
+import { S as SectionHeader } from "../../../../../chunks/SectionHeader.js";
+import { T as TimeAgo } from "../../../../../chunks/TimeAgo.js";
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
     let { data, form } = $$props;
@@ -30,14 +31,29 @@ function _page($$renderer, $$props) {
       if (unassigned.length > 0) out.push({ name: "__unassigned__", issues: unassigned });
       return out;
     });
-    $$renderer2.push(`<div class="header-row svelte-ue3r68"><h2 class="section-title svelte-ue3r68">Issue board</h2> `);
-    if (data.boardResp.configured && data.boardResp.board) {
-      $$renderer2.push("<!--[0-->");
-      $$renderer2.push(`<div class="actions svelte-ue3r68"><span class="sync-time svelte-ue3r68">${escape_html(data.boardResp.board.last_synced_at ? `synced ${formatRelative(data.boardResp.board.last_synced_at)}` : "never synced")}</span> <form method="POST" action="?/sync" class="inline-form"><button type="submit" class="ghost">Sync</button></form></div>`);
-    } else {
-      $$renderer2.push("<!--[-1-->");
+    {
+      let actions = function($$renderer3) {
+        if (data.boardResp.configured && data.boardResp.board) {
+          $$renderer3.push("<!--[0-->");
+          $$renderer3.push(`<span class="sync-time svelte-ue3r68">`);
+          if (data.boardResp.board.last_synced_at) {
+            $$renderer3.push("<!--[0-->");
+            $$renderer3.push(`synced `);
+            TimeAgo($$renderer3, { value: data.boardResp.board.last_synced_at });
+            $$renderer3.push(`<!---->`);
+          } else {
+            $$renderer3.push("<!--[-1-->");
+            $$renderer3.push(`never synced`);
+          }
+          $$renderer3.push(`<!--]--></span> <form method="POST" action="?/sync" class="inline-form"><button type="submit" class="ghost">Sync</button></form>`);
+        } else {
+          $$renderer3.push("<!--[-1-->");
+        }
+        $$renderer3.push(`<!--]-->`);
+      };
+      SectionHeader($$renderer2, { title: "Issue board", actions });
     }
-    $$renderer2.push(`<!--]--></div> `);
+    $$renderer2.push(`<!----> `);
     if (data.boardError) {
       $$renderer2.push("<!--[0-->");
       FlashMessage($$renderer2, {

@@ -30,6 +30,13 @@ function _page($$renderer, $$props) {
           return "muted";
       }
     }
+    const WEBHOOK_EVENTS = [
+      "run_started",
+      "run_completed",
+      "run_failed",
+      "project_created",
+      "member_added"
+    ];
     PageHeader($$renderer2, { title: "Settings" });
     $$renderer2.push(`<!----> <p class="nav-link svelte-1i19ct2"><a href="/settings/notifications">→ Notification targets</a></p> `);
     if (data.flash.connected) {
@@ -177,6 +184,86 @@ function _page($$renderer, $$props) {
           $$renderer3.push("<!--[-1-->");
         }
         $$renderer3.push(`<!--]--> <button type="submit">Add SSH key</button></form>`);
+      }
+    });
+    $$renderer2.push(`<!----> `);
+    Panel($$renderer2, {
+      title: "Outbound webhooks",
+      children: ($$renderer3) => {
+        $$renderer3.push(`<p class="hint svelte-1i19ct2">Receive HTTP POST callbacks when events happen in your workspaces.
+    Optionally set a secret to verify webhook signatures.</p> `);
+        if (data.webhooks.length === 0) {
+          $$renderer3.push("<!--[0-->");
+          $$renderer3.push(`<p class="hint svelte-1i19ct2">No webhooks configured yet.</p>`);
+        } else {
+          $$renderer3.push("<!--[-1-->");
+          $$renderer3.push(`<!--[-->`);
+          const each_array_3 = ensure_array_like(data.webhooks);
+          for (let $$index_4 = 0, $$length = each_array_3.length; $$index_4 < $$length; $$index_4++) {
+            let wh = each_array_3[$$index_4];
+            $$renderer3.push(`<div class="row row-stretch svelte-1i19ct2"><div><div class="webhook-url svelte-1i19ct2">${escape_html(wh.url)}</div> <div class="event-badges svelte-1i19ct2" style="margin-top: var(--space-1);"><!--[-->`);
+            const each_array_4 = ensure_array_like(wh.events);
+            for (let $$index_3 = 0, $$length2 = each_array_4.length; $$index_3 < $$length2; $$index_3++) {
+              let ev = each_array_4[$$index_3];
+              Badge($$renderer3, {
+                variant: "muted",
+                size: "sm",
+                children: ($$renderer4) => {
+                  $$renderer4.push(`<!---->${escape_html(ev)}`);
+                }
+              });
+            }
+            $$renderer3.push(`<!--]--></div> <p class="hint svelte-1i19ct2">added ${escape_html(new Date(wh.created_at).toLocaleDateString())}${escape_html(wh.secret_hash ? " · signed" : "")}</p></div> <div class="webhook-actions svelte-1i19ct2"><form method="POST" action="?/testWebhook" class="inline-form"><input type="hidden" name="id"${attr("value", wh.id)}/> <button type="submit" class="ghost">Test</button></form> <form method="POST" action="?/deleteWebhook" class="inline-form"><input type="hidden" name="id"${attr("value", wh.id)}/> <button type="submit" class="ghost">Delete</button></form></div></div>`);
+          }
+          $$renderer3.push(`<!--]-->`);
+        }
+        $$renderer3.push(`<!--]--> `);
+        if (form?.webhookTested) {
+          $$renderer3.push("<!--[0-->");
+          $$renderer3.push(`<p class="form-success svelte-1i19ct2">Test event sent.</p>`);
+        } else {
+          $$renderer3.push("<!--[-1-->");
+        }
+        $$renderer3.push(`<!--]--> `);
+        if (form?.webhookDeleted) {
+          $$renderer3.push("<!--[0-->");
+          $$renderer3.push(`<p class="form-success svelte-1i19ct2">Webhook deleted.</p>`);
+        } else {
+          $$renderer3.push("<!--[-1-->");
+        }
+        $$renderer3.push(`<!--]--> <form method="POST" action="?/addWebhook" style="margin-top: var(--space-4);"><div class="field"><label for="wh-url">Payload URL</label> <input id="wh-url" name="url" type="url" required="" placeholder="https://example.com/webhook"${attr("value", form?.webhookUrl || "")}/></div> <fieldset class="field" style="border: none; padding: 0; margin: 0 0 1rem 0;"><legend style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: var(--text-muted);">Events</legend> <div class="checkbox-group svelte-1i19ct2"><!--[-->`);
+        const each_array_5 = ensure_array_like(WEBHOOK_EVENTS);
+        for (let $$index_5 = 0, $$length = each_array_5.length; $$index_5 < $$length; $$index_5++) {
+          let ev = each_array_5[$$index_5];
+          $$renderer3.push(`<label class="svelte-1i19ct2"><input type="checkbox" name="events"${attr("value", ev)} class="svelte-1i19ct2"/> ${escape_html(ev)}</label>`);
+        }
+        $$renderer3.push(`<!--]--></div></fieldset> <div class="field"><label for="wh-secret">Secret (optional)</label> <input id="wh-secret" name="secret" type="password" autocomplete="off" placeholder="Used for HMAC signature verification"/></div> `);
+        if (form?.webhookError) {
+          $$renderer3.push("<!--[0-->");
+          $$renderer3.push(`<p class="form-error svelte-1i19ct2">${escape_html(form.webhookError)}</p>`);
+        } else {
+          $$renderer3.push("<!--[-1-->");
+        }
+        $$renderer3.push(`<!--]--> `);
+        if (form?.webhookAdded) {
+          $$renderer3.push("<!--[0-->");
+          $$renderer3.push(`<p class="form-success svelte-1i19ct2">Webhook created.</p>`);
+        } else {
+          $$renderer3.push("<!--[-1-->");
+        }
+        $$renderer3.push(`<!--]--> <button type="submit">Add webhook</button></form>`);
+      }
+    });
+    $$renderer2.push(`<!----> `);
+    Panel($$renderer2, {
+      title: "Push notifications",
+      children: ($$renderer3) => {
+        {
+          $$renderer3.push("<!--[0-->");
+          $$renderer3.push(`<div class="push-info svelte-1i19ct2">Push notifications are not supported in this browser. Use a modern browser with
+      service worker support to enable push notifications.</div>`);
+        }
+        $$renderer3.push(`<!--]-->`);
       }
     });
     $$renderer2.push(`<!---->`);

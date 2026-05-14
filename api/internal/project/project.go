@@ -73,6 +73,7 @@ type Handlers struct {
 	Secret    *secret.Box     // nil-safe; required to decrypt user_ssh_keys rows
 	ReposRoot string
 	Logger    *slog.Logger
+	Notify    quota.AlertSender
 }
 
 // List returns projects in a given workspace (must belong to the user).
@@ -661,6 +662,8 @@ func (h *Handlers) cloneAsync(userID, projectID, workspaceID uuid.UUID, gitURL, 
 		h.markError(projectID, err)
 		return
 	}
+
+	go quota.CheckAndAlert(ctx, h.Pool, h.Logger, h.ReposRoot, userID, h.Notify)
 
 	dest := filepath.Join(h.ReposRoot, workspaceID.String(), projectID.String())
 

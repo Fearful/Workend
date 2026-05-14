@@ -34,7 +34,8 @@ type Card struct {
 }
 
 type Handlers struct {
-	Pool *pgxpool.Pool
+	Pool      *pgxpool.Pool
+	ReposRoot string
 }
 
 // GET /api/me/dashboard

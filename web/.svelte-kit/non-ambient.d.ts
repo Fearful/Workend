@@ -29,7 +29,7 @@ declare module "$app/types" {
 	type MatcherParam<M> = M extends (param : string) => param is (infer U extends string) ? U : string;
 
 	export interface AppTypes {
-		RouteId(): "/" | "/admin" | "/auth" | "/auth/[provider]" | "/auth/[provider]/callback" | "/auth/[provider]/start" | "/dashboard" | "/dockscope" | "/issues" | "/issues/[id]" | "/issues/[id]/move" | "/login" | "/logout" | "/mentions" | "/otel" | "/pipeline-runs" | "/pipeline-runs/[id]" | "/projects" | "/projects/[id]" | "/projects/[id]/board" | "/projects/[id]/branches" | "/projects/[id]/images" | "/projects/[id]/pipelines" | "/projects/[id]/runs" | "/projects/[id]/schedules" | "/projects/[id]/trends" | "/runs" | "/runs/[id]" | "/runs/[id]/cancel" | "/runs/[id]/compare" | "/runs/[id]/compare/[other]" | "/runs/[id]/log-stream" | "/settings" | "/settings/notifications" | "/signup" | "/workspaces" | "/workspaces/new" | "/workspaces/[id]" | "/workspaces/[id]/dashboard" | "/workspaces/[id]/projects" | "/workspaces/[id]/projects/new";
+		RouteId(): "/" | "/admin" | "/auth" | "/auth/[provider]" | "/auth/[provider]/callback" | "/auth/[provider]/start" | "/dashboard" | "/dockscope" | "/issues" | "/issues/[id]" | "/issues/[id]/move" | "/login" | "/logout" | "/mentions" | "/otel" | "/pipeline-runs" | "/pipeline-runs/[id]" | "/projects" | "/projects/[id]" | "/projects/[id]/blame" | "/projects/[id]/board" | "/projects/[id]/branches" | "/projects/[id]/images" | "/projects/[id]/monorepo" | "/projects/[id]/pipelines" | "/projects/[id]/previews" | "/projects/[id]/runs" | "/projects/[id]/schedules" | "/projects/[id]/trends" | "/runs" | "/runs/[id]" | "/runs/[id]/cancel" | "/runs/[id]/compare" | "/runs/[id]/compare/[other]" | "/runs/[id]/log-stream" | "/sandboxes" | "/sandboxes/[id]" | "/settings" | "/settings/notifications" | "/signup" | "/workspaces" | "/workspaces/new" | "/workspaces/[id]" | "/workspaces/[id]/activity" | "/workspaces/[id]/dashboard" | "/workspaces/[id]/projects" | "/workspaces/[id]/projects/new" | "/workspaces/[id]/roles" | "/workspaces/[id]/secrets";
 		RouteParams(): {
 			"/auth/[provider]": { provider: string };
 			"/auth/[provider]/callback": { provider: string };
@@ -38,10 +38,13 @@ declare module "$app/types" {
 			"/issues/[id]/move": { id: string };
 			"/pipeline-runs/[id]": { id: string };
 			"/projects/[id]": { id: string };
+			"/projects/[id]/blame": { id: string };
 			"/projects/[id]/board": { id: string };
 			"/projects/[id]/branches": { id: string };
 			"/projects/[id]/images": { id: string };
+			"/projects/[id]/monorepo": { id: string };
 			"/projects/[id]/pipelines": { id: string };
+			"/projects/[id]/previews": { id: string };
 			"/projects/[id]/runs": { id: string };
 			"/projects/[id]/schedules": { id: string };
 			"/projects/[id]/trends": { id: string };
@@ -50,10 +53,14 @@ declare module "$app/types" {
 			"/runs/[id]/compare": { id: string };
 			"/runs/[id]/compare/[other]": { id: string; other: string };
 			"/runs/[id]/log-stream": { id: string };
+			"/sandboxes/[id]": { id: string };
 			"/workspaces/[id]": { id: string };
+			"/workspaces/[id]/activity": { id: string };
 			"/workspaces/[id]/dashboard": { id: string };
 			"/workspaces/[id]/projects": { id: string };
-			"/workspaces/[id]/projects/new": { id: string }
+			"/workspaces/[id]/projects/new": { id: string };
+			"/workspaces/[id]/roles": { id: string };
+			"/workspaces/[id]/secrets": { id: string }
 		};
 		LayoutParams(): {
 			"/": { provider?: string; id?: string; other?: string };
@@ -75,10 +82,13 @@ declare module "$app/types" {
 			"/pipeline-runs/[id]": { id: string };
 			"/projects": { id?: string };
 			"/projects/[id]": { id: string };
+			"/projects/[id]/blame": { id: string };
 			"/projects/[id]/board": { id: string };
 			"/projects/[id]/branches": { id: string };
 			"/projects/[id]/images": { id: string };
+			"/projects/[id]/monorepo": { id: string };
 			"/projects/[id]/pipelines": { id: string };
+			"/projects/[id]/previews": { id: string };
 			"/projects/[id]/runs": { id: string };
 			"/projects/[id]/schedules": { id: string };
 			"/projects/[id]/trends": { id: string };
@@ -88,17 +98,22 @@ declare module "$app/types" {
 			"/runs/[id]/compare": { id: string; other?: string };
 			"/runs/[id]/compare/[other]": { id: string; other: string };
 			"/runs/[id]/log-stream": { id: string };
+			"/sandboxes": { id?: string };
+			"/sandboxes/[id]": { id: string };
 			"/settings": Record<string, never>;
 			"/settings/notifications": Record<string, never>;
 			"/signup": Record<string, never>;
 			"/workspaces": { id?: string };
 			"/workspaces/new": Record<string, never>;
 			"/workspaces/[id]": { id: string };
+			"/workspaces/[id]/activity": { id: string };
 			"/workspaces/[id]/dashboard": { id: string };
 			"/workspaces/[id]/projects": { id: string };
-			"/workspaces/[id]/projects/new": { id: string }
+			"/workspaces/[id]/projects/new": { id: string };
+			"/workspaces/[id]/roles": { id: string };
+			"/workspaces/[id]/secrets": { id: string }
 		};
-		Pathname(): "/" | "/admin" | `/auth/${string}/callback` & {} | `/auth/${string}/start` & {} | "/dashboard" | "/dockscope" | `/issues/${string}` & {} | `/issues/${string}/move` & {} | "/login" | "/logout" | "/mentions" | "/otel" | `/pipeline-runs/${string}` & {} | `/projects/${string}` & {} | `/projects/${string}/board` & {} | `/projects/${string}/branches` & {} | `/projects/${string}/images` & {} | `/projects/${string}/pipelines` & {} | `/projects/${string}/runs` & {} | `/projects/${string}/schedules` & {} | `/projects/${string}/trends` & {} | `/runs/${string}` & {} | `/runs/${string}/cancel` & {} | `/runs/${string}/compare/${string}` & {} | `/runs/${string}/log-stream` & {} | "/settings" | "/settings/notifications" | "/signup" | "/workspaces/new" | `/workspaces/${string}` & {} | `/workspaces/${string}/dashboard` & {} | `/workspaces/${string}/projects/new` & {};
+		Pathname(): "/" | "/admin" | `/auth/${string}/callback` & {} | `/auth/${string}/start` & {} | "/dashboard" | "/dockscope" | `/issues/${string}` & {} | `/issues/${string}/move` & {} | "/login" | "/logout" | "/mentions" | "/otel" | `/pipeline-runs/${string}` & {} | `/projects/${string}` & {} | `/projects/${string}/blame` & {} | `/projects/${string}/board` & {} | `/projects/${string}/branches` & {} | `/projects/${string}/images` & {} | `/projects/${string}/monorepo` & {} | `/projects/${string}/pipelines` & {} | `/projects/${string}/previews` & {} | `/projects/${string}/runs` & {} | `/projects/${string}/schedules` & {} | `/projects/${string}/trends` & {} | `/runs/${string}` & {} | `/runs/${string}/cancel` & {} | `/runs/${string}/compare/${string}` & {} | `/runs/${string}/log-stream` & {} | "/sandboxes" | `/sandboxes/${string}` & {} | "/settings" | "/settings/notifications" | "/signup" | "/workspaces/new" | `/workspaces/${string}` & {} | `/workspaces/${string}/activity` & {} | `/workspaces/${string}/dashboard` & {} | `/workspaces/${string}/projects/new` & {} | `/workspaces/${string}/roles` & {} | `/workspaces/${string}/secrets` & {};
 		ResolvedPathname(): `${"" | `/${string}`}${ReturnType<AppTypes['Pathname']>}`;
 		Asset(): string & {};
 	}

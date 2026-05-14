@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,11 +38,22 @@ type WSUsage struct {
 type Handlers struct {
 	Pool      *pgxpool.Pool
 	ReposRoot string
+	Cache     *Cache
+	Logger    *slog.Logger
+	Notify    AlertSender
 }
 
 // GET /api/me/usage
 func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 	uid := auth.UserID(r.Context())
+
+	if h.Cache != nil {
+		if cached, ok := h.Cache.Get(uid); ok {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(cached)
+			return
+		}
+	}
 
 	var quotaBytes int64
 	if err := h.Pool.QueryRow(r.Context(),
@@ -61,13 +73,21 @@ func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 
 	usage := Usage{UserID: uid, QuotaBytes: quotaBytes, Workspaces: []WSUsage{}}
 	for rows.Next() {
-		var w WSUsage
-		if err := rows.Scan(&w.WorkspaceID, &w.WorkspaceName); err != nil {
+		var ws WSUsage
+		if err := rows.Scan(&ws.WorkspaceID, &ws.WorkspaceName); err != nil {
 			continue
 		}
-		w.Bytes = dirSize(filepath.Join(h.ReposRoot, w.WorkspaceID.String()))
-		usage.UsedBytes += w.Bytes
-		usage.Workspaces = append(usage.Workspaces, w)
+		ws.Bytes = dirSize(filepath.Join(h.ReposRoot, ws.WorkspaceID.String()))
+		usage.UsedBytes += ws.Bytes
+		usage.Workspaces = append(usage.Workspaces, ws)
+	}
+
+	if h.Cache != nil {
+		h.Cache.Set(uid, usage)
+	}
+
+	if h.Logger != nil {
+		go CheckAndAlert(r.Context(), h.Pool, h.Logger, h.ReposRoot, uid, h.Notify)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { error, redirect } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { apiFetch } from '$lib/api';
 
@@ -41,6 +41,21 @@ interface Artifact {
   size_bytes: number;
   mime_type: string | null;
   captured_at: string;
+}
+
+interface RunShare {
+  id: string;
+  token: string;
+  created_by: string;
+  expires_at: string;
+  created_at: string;
+}
+
+interface RunVerification {
+  signature: string;
+  key_id: string;
+  verified: boolean;
+  signed_at: string;
 }
 
 export const load = async ({ params, locals, cookies }: Parameters<PageServerLoad>[0]) => {
@@ -89,7 +104,17 @@ export const load = async ({ params, locals, cookies }: Parameters<PageServerLoa
     }
   }
 
-  return { run: runResult.data, log, recentRuns, comments, artifacts, isTaskPinned };
+  // Sharing & signing data
+  const sharesResult = await apiFetch<RunShare[]>(`/api/runs/${params.id}/shares`, { cookie: cookieHeader });
+  const shares = sharesResult.ok ? (sharesResult.data ?? []) : [];
+
+  let verification: RunVerification | null = null;
+  if (isTerminal) {
+    const verifyResult = await apiFetch<RunVerification>(`/api/runs/${params.id}/verify`, { cookie: cookieHeader });
+    verification = verifyResult.ok ? (verifyResult.data ?? null) : null;
+  }
+
+  return { run: runResult.data, log, recentRuns, comments, artifacts, isTaskPinned, shares, verification };
 };
 
 export const actions = {
@@ -183,6 +208,64 @@ export const actions = {
     });
     if (!newRun.ok || !newRun.data) throw error(newRun.status, newRun.error || 'rerun failed');
     throw redirect(303, `/runs/${newRun.data.id}`);
+  },
+
+  share: async ({ params, request, cookies }: import('./$types').RequestEvent) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
+    const fd = await request.formData();
+    const expiresRaw = String(fd.get('expires_hours') || '').trim();
+
+    const body: { expires_hours?: number } = {};
+    if (expiresRaw) {
+      const hours = parseInt(expiresRaw, 10);
+      if (!Number.isFinite(hours) || hours < 1 || hours > 720) {
+        return fail(400, { shareError: 'expires_hours must be 1-720' });
+      }
+      body.expires_hours = hours;
+    }
+
+    const r = await apiFetch<RunShare>(`/api/runs/${params.id}/share`, {
+      method: 'POST',
+      body,
+      cookie: cookieHeader
+    });
+    if (!r.ok) return fail(r.status, { shareError: r.error || 'failed to create share link' });
+    return { shareCreated: true };
+  },
+
+  revokeShare: async ({ params, request, cookies }: import('./$types').RequestEvent) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
+    const fd = await request.formData();
+    const shareId = String(fd.get('share_id') || '');
+    if (!shareId) return fail(400, { shareError: 'share_id required' });
+
+    const r = await apiFetch(`/api/run-shares/${shareId}`, {
+      method: 'DELETE',
+      cookie: cookieHeader
+    });
+    if (!r.ok) return fail(r.status, { shareError: r.error || 'failed to revoke share' });
+    return { shareRevoked: true };
+  },
+
+  sign: async ({ params, request, cookies }: import('./$types').RequestEvent) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
+    const fd = await request.formData();
+    const key_id = String(fd.get('key_id') || '').trim();
+    const private_key = String(fd.get('private_key') || '').trim();
+
+    if (!key_id) return fail(400, { signError: 'key_id is required' });
+    if (!private_key) return fail(400, { signError: 'private_key is required' });
+
+    const r = await apiFetch(`/api/runs/${params.id}/sign`, {
+      method: 'POST',
+      body: { key_id, private_key },
+      cookie: cookieHeader
+    });
+    if (!r.ok) return fail(r.status, { signError: r.error || 'failed to sign run' });
+    return { signed: true };
   }
 };
 ;null as any as Actions;

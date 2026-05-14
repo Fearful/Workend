@@ -6,6 +6,9 @@ package dashboard
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,10 +21,31 @@ type WorkspaceSummary struct {
 	WorkspaceID    uuid.UUID       `json:"workspace_id"`
 	Window         int             `json:"window_days"`
 	Totals         WorkspaceTotals `json:"totals"`
+	Storage        StorageInfo     `json:"storage"`
 	SlowestTasks   []SlowTask      `json:"slowest_tasks"`
 	FailingTasks   []FailingTask   `json:"failing_tasks"`
 	DailyRuns      []DayBucket     `json:"daily_runs"`
 	ProjectsHealth []ProjectHealth `json:"projects_health"`
+}
+
+type StorageInfo struct {
+	QuotaBytes     int64            `json:"quota_bytes"`
+	UsedBytes      int64            `json:"used_bytes"`
+	Projects       []ProjectStorage `json:"projects"`
+	Disk           DiskInfo         `json:"disk"`
+}
+
+type ProjectStorage struct {
+	ProjectID   uuid.UUID `json:"project_id"`
+	ProjectName string    `json:"project_name"`
+	Bytes       int64     `json:"bytes"`
+}
+
+type DiskInfo struct {
+	TotalBytes     uint64 `json:"total_bytes"`
+	FreeBytes      uint64 `json:"free_bytes"`
+	UsedBytes      uint64 `json:"used_bytes"`
+	AvailableBytes uint64 `json:"available_bytes"`
 }
 
 type WorkspaceTotals struct {
@@ -243,8 +267,68 @@ func (h *Handlers) WorkspaceSummary(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Storage: per-project disk sizes + user quota + instance disk.
+	if h.ReposRoot != "" {
+		var quotaBytes int64
+		_ = h.Pool.QueryRow(r.Context(),
+			`SELECT quota_bytes FROM users WHERE id = $1`, uid).Scan(&quotaBytes)
+		resp.Storage.QuotaBytes = quotaBytes
+
+		wsDir := filepath.Join(h.ReposRoot, wsID.String())
+		projRows, err := h.Pool.Query(r.Context(),
+			`SELECT id, name FROM projects WHERE workspace_id = $1 ORDER BY name`, wsID)
+		if err == nil {
+			defer projRows.Close()
+			for projRows.Next() {
+				var ps ProjectStorage
+				if err := projRows.Scan(&ps.ProjectID, &ps.ProjectName); err == nil {
+					ps.Bytes = dirSize(filepath.Join(wsDir, ps.ProjectID.String()))
+					resp.Storage.UsedBytes += ps.Bytes
+					resp.Storage.Projects = append(resp.Storage.Projects, ps)
+				}
+			}
+		}
+		if resp.Storage.Projects == nil {
+			resp.Storage.Projects = []ProjectStorage{}
+		}
+
+		resp.Storage.Disk = diskInfo(h.ReposRoot)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func dirSize(root string) int64 {
+	var total int64
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	})
+	return total
+}
+
+func diskInfo(path string) DiskInfo {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return DiskInfo{}
+	}
+	total := stat.Blocks * uint64(stat.Bsize)
+	free := stat.Bfree * uint64(stat.Bsize)
+	avail := stat.Bavail * uint64(stat.Bsize)
+	return DiskInfo{
+		TotalBytes:     total,
+		FreeBytes:      free,
+		UsedBytes:      total - free,
+		AvailableBytes: avail,
+	}
 }
 
 func parseDaysParam(r *http.Request, def int) int {

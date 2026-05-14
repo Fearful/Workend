@@ -47,6 +47,10 @@ type Spec struct {
 	// Artifact patterns to capture from RepoPath after the run finishes.
 	// Empty = skip capture. See artifact.Capture for the supported globs.
 	ArtifactPatterns []string
+
+	// BaseImage overrides the default container image for this task when
+	// non-empty. Set via the task's base_image column.
+	BaseImage string
 }
 
 // Result is what Execute returns on completion.
@@ -77,6 +81,9 @@ func Execute(ctx context.Context, dc *wdagger.Client, spec Spec) (Result, error)
 	}
 
 	base := baseImage(spec.Source, spec.RepoPath)
+	if spec.BaseImage != "" {
+		base = spec.BaseImage
+	}
 	setup := setupSteps(spec.Source)
 
 	container := client.Container().From(base)
@@ -390,7 +397,7 @@ func baseImage(source, repoPath string) string {
 	case "just":
 		return "alpine:3.20"
 	case "dagger":
-		return "registry.dagger.io/cli:v0.13.7"
+		return "registry.dagger.io/cli:v0.20.5"
 	case "go":
 		return goImage(repoPath)
 	case "python":

@@ -12,7 +12,7 @@ type OptionalUnion<U extends Record<string, any>, A extends keyof U = U extends 
 export type Snapshot<T = any> = Kit.Snapshot<T>;
 type PageServerParentData = EnsureDefined<LayoutServerData>;
 type PageParentData = EnsureDefined<LayoutData>;
-type LayoutRouteId = RouteId | "/" | "/admin" | "/dashboard" | "/dockscope" | "/issues/[id]" | "/login" | "/logout" | "/mentions" | "/otel" | "/pipeline-runs/[id]" | "/projects/[id]" | "/projects/[id]/board" | "/projects/[id]/branches" | "/projects/[id]/images" | "/projects/[id]/pipelines" | "/projects/[id]/runs" | "/projects/[id]/schedules" | "/projects/[id]/trends" | "/runs/[id]" | "/runs/[id]/compare/[other]" | "/settings" | "/settings/notifications" | "/signup" | "/workspaces/[id]" | "/workspaces/[id]/dashboard" | "/workspaces/[id]/projects/new" | "/workspaces/new" | null
+type LayoutRouteId = RouteId | "/" | "/admin" | "/dashboard" | "/dockscope" | "/issues/[id]" | "/login" | "/logout" | "/mentions" | "/otel" | "/pipeline-runs/[id]" | "/projects/[id]" | "/projects/[id]/blame" | "/projects/[id]/board" | "/projects/[id]/branches" | "/projects/[id]/images" | "/projects/[id]/monorepo" | "/projects/[id]/pipelines" | "/projects/[id]/previews" | "/projects/[id]/runs" | "/projects/[id]/schedules" | "/projects/[id]/trends" | "/runs/[id]" | "/runs/[id]/compare/[other]" | "/sandboxes" | "/sandboxes/[id]" | "/settings" | "/settings/notifications" | "/signup" | "/workspaces/[id]" | "/workspaces/[id]/activity" | "/workspaces/[id]/dashboard" | "/workspaces/[id]/projects/new" | "/workspaces/[id]/roles" | "/workspaces/[id]/secrets" | "/workspaces/new" | null
 type LayoutParams = RouteParams & { id?: string; other?: string }
 type LayoutServerParentData = EnsureDefined<{}>;
 type LayoutParentData = EnsureDefined<{}>;

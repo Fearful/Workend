@@ -1,8 +1,38 @@
 <script lang="ts">
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import Panel from '$lib/components/Panel.svelte';
   import Badge from '$lib/components/Badge.svelte';
 
-  let { data } = $props();
+  let { data, form } = $props();
+
+  let exportFrom = $state('');
+  let exportTo = $state('');
+  let exporting = $state(false);
+
+  async function exportCSV() {
+    if (!exportFrom || !exportTo) return;
+    exporting = true;
+    try {
+      const resp = await fetch(`/api/admin/audit-log/export?from=${exportFrom}&to=${exportTo}`);
+      if (!resp.ok) {
+        alert('Export failed: ' + (await resp.text()));
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit-log-${exportFrom}-to-${exportTo}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Export failed');
+    } finally {
+      exporting = false;
+    }
+  }
 </script>
 
 <style>
@@ -45,6 +75,54 @@
   td.mono { font-family: var(--font-mono); color: var(--text); }
   td.muted { color: var(--text-dim); font-family: var(--font-mono); }
   .name-cell { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+  .export-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .export-row .field {
+    margin-bottom: 0;
+    min-width: 160px;
+  }
+  .export-row label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+
+  .retention-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+  }
+  .retention-row .field {
+    margin-bottom: 0;
+    min-width: 120px;
+  }
+
+  .form-error {
+    color: var(--danger-text);
+    font-size: 0.875rem;
+    margin: var(--space-2) 0 0 0;
+  }
+  .form-success {
+    color: var(--success);
+    font-size: 0.875rem;
+    margin: var(--space-2) 0 0 0;
+  }
+  .hint {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    margin: 0.25rem 0 0 0;
+    line-height: 1.5;
+  }
 </style>
 
 <PageHeader title="Admin" />
@@ -99,3 +177,35 @@
     </tbody>
   </table>
 </div>
+
+<Panel title="Audit log management">
+  <p class="hint">Export audit log entries as CSV or configure automatic retention cleanup.</p>
+
+  <div class="export-row">
+    <div class="field">
+      <label for="export-from">From</label>
+      <input id="export-from" type="date" bind:value={exportFrom} />
+    </div>
+    <div class="field">
+      <label for="export-to">To</label>
+      <input id="export-to" type="date" bind:value={exportTo} />
+    </div>
+    <button type="button" onclick={exportCSV} disabled={exporting || !exportFrom || !exportTo} class="ghost">
+      {exporting ? 'Exporting...' : 'Export CSV'}
+    </button>
+  </div>
+
+  <div class="retention-row">
+    <form method="POST" action="?/setRetention" style="display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap;">
+      <div class="field">
+        <label for="retention-days">Retention period (days)</label>
+        <input id="retention-days" name="days" type="number" min="1" max="3650"
+               placeholder="e.g. 90, 180, 365"
+               style="width: 180px;" />
+      </div>
+      <button type="submit" class="ghost">Set retention</button>
+    </form>
+  </div>
+  {#if form?.retentionError}<p class="form-error">{form.retentionError}</p>{/if}
+  {#if form?.retentionSet}<p class="form-success">Retention set to {form.retentionDays} days.</p>{/if}
+</Panel>

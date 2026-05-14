@@ -1,8 +1,13 @@
-import { e as escape_html, c as ensure_array_like, b as attr_class, s as stringify, d as derived } from "../../../../../../chunks/renderer.js";
-import { s as shortSha } from "../../../../../../chunks/utils2.js";
+import { f as attr_style, s as stringify, e as escape_html, c as ensure_array_like, b as attr_class, d as derived } from "../../../../../../chunks/renderer.js";
+import { a as statusColor, s as shortSha } from "../../../../../../chunks/utils2.js";
 import { B as Breadcrumb } from "../../../../../../chunks/Breadcrumb.js";
 import { P as PageHeader } from "../../../../../../chunks/PageHeader.js";
-import { S as StatusDot } from "../../../../../../chunks/StatusDot.js";
+function StatusDot($$renderer, $$props) {
+  $$renderer.component(($$renderer2) => {
+    let { status, size = 8 } = $$props;
+    $$renderer2.push(`<span class="dot"${attr_style(`background: ${stringify(statusColor(status))}; width: ${stringify(size)}px; height: ${stringify(size)}px;`)}></span>`);
+  });
+}
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
     let { data } = $$props;

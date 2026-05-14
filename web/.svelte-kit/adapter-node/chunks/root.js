@@ -1,5 +1,5 @@
 import { H as HYDRATION_ERROR, C as COMMENT_NODE, i as HYDRATION_END, j as HYDRATION_START, k as HYDRATION_START_ELSE, r as run_all, B as BOUNDARY_EFFECT, R as REACTION_RAN, E as ERROR_VALUE, l as EFFECT, m as CONNECTED, n as CLEAN, M as MAYBE_DIRTY, D as DIRTY, o as DERIVED, W as WAS_MARKED, I as INERT, p as BLOCK_EFFECT, U as UNINITIALIZED, A as ASYNC, q as DESTROYED, t as EAGER_EFFECT, u as deferred, v as RENDER_EFFECT, w as MANAGED_EFFECT, x as ROOT_EFFECT, y as BRANCH_EFFECT, z as includes, F as HYDRATION_START_FAILED, G as EFFECT_TRANSPARENT, J as EFFECT_PRESERVED, S as STALE_REACTION, K as noop, L as REACTION_IS_UPDATING, N as STATE_SYMBOL, O as object_prototype, P as array_prototype, Q as get_descriptor, T as get_prototype_of, V as is_array, X as is_extensible, Y as HEAD_EFFECT, Z as DESTROYING, _ as USER_EFFECT, $ as index_of, a0 as define_property, a1 as array_from, a2 as is_passive_event, a3 as LEGACY_PROPS, a4 as render, a5 as setContext, d as derived } from "./renderer.js";
-import { B as BROWSER } from "./false.js";
+import { D as DEV } from "./false.js";
 let tracing_mode_flag = false;
 function effect_update_depth_exceeded() {
   {
@@ -2276,7 +2276,7 @@ function update_effect(effect) {
     effect.teardown = typeof teardown === "function" ? teardown : null;
     effect.wv = write_version;
     var dep;
-    if (BROWSER && tracing_mode_flag && (effect.f & DIRTY) !== 0 && effect.deps !== null) ;
+    if (DEV && tracing_mode_flag && (effect.f & DIRTY) !== 0 && effect.deps !== null) ;
   } finally {
     is_updating_effect = was_updating_effect;
     active_effect = previous_effect;

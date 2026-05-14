@@ -6,6 +6,14 @@
 
   let { data, form } = $props();
 
+  let pushSupported = $state(false);
+  let pushLoading = $state(false);
+  let pushError = $state<string | null>(null);
+
+  $effect(() => {
+    pushSupported = typeof window !== 'undefined' && 'PushManager' in window && 'serviceWorker' in navigator;
+  });
+
   async function connect(providerID: string) {
     const r = await fetch(`/auth/${providerID}/start`, { method: 'POST' });
     if (!r.ok) {
@@ -14,6 +22,60 @@
     }
     const { url } = await r.json();
     window.location.href = url;
+  }
+
+  async function enablePush() {
+    if (!data.vapidPublicKey) {
+      pushError = 'VAPID key not configured on server';
+      return;
+    }
+    pushLoading = true;
+    pushError = null;
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        pushError = 'Notification permission denied';
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(data.vapidPublicKey).buffer as ArrayBuffer
+      });
+      const formData = new FormData();
+      formData.set('subscription', JSON.stringify(sub.toJSON()));
+      const r = await fetch('?/pushSubscribe', { method: 'POST', body: formData });
+      if (!r.ok) {
+        pushError = 'Failed to register subscription';
+      } else {
+        window.location.reload();
+      }
+    } catch (err) {
+      pushError = err instanceof Error ? err.message : 'Push subscription failed';
+    } finally {
+      pushLoading = false;
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    const arr = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) {
+      arr[i] = raw.charCodeAt(i);
+    }
+    return arr;
+  }
+
+  function truncateEndpoint(endpoint: string): string {
+    try {
+      const u = new URL(endpoint);
+      const path = u.pathname.length > 30 ? u.pathname.slice(0, 30) + '...' : u.pathname;
+      return u.host + path;
+    } catch {
+      return endpoint.length > 50 ? endpoint.slice(0, 50) + '...' : endpoint;
+    }
   }
 
   function providerLabel(kind: string): string {
@@ -33,6 +95,14 @@
       default: return 'muted';
     }
   }
+
+  const WEBHOOK_EVENTS = [
+    'run_started',
+    'run_completed',
+    'run_failed',
+    'project_created',
+    'member_added'
+  ] as const;
 </script>
 
 <style>
@@ -87,9 +157,63 @@
     margin: 0 0 var(--space-2) 0;
   }
 
+  .event-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .webhook-url {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    word-break: break-all;
+  }
+
+  .webhook-actions {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+  }
+
+  .checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin: var(--space-2) 0;
+  }
+  .checkbox-group label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--text);
+    cursor: pointer;
+    margin-bottom: 0;
+  }
+  .checkbox-group input[type="checkbox"] {
+    width: auto;
+    accent-color: var(--accent);
+  }
+
+  .push-info {
+    background: var(--status-info-bg);
+    color: var(--status-info-fg);
+    border: 1px solid var(--status-info-border);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+  }
+
+  .push-endpoint {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
   @media (max-width: 640px) {
     .row { grid-template-columns: 1fr; gap: var(--space-2); }
     .row-three { grid-template-columns: 1fr; }
+    .webhook-actions { flex-wrap: wrap; }
   }
 </style>
 
@@ -235,4 +359,116 @@
     {#if form?.sshAdded}<p class="form-success">SSH key added.</p>{/if}
     <button type="submit">Add SSH key</button>
   </form>
+</Panel>
+
+<Panel title="Outbound webhooks">
+  <p class="hint">
+    Receive HTTP POST callbacks when events happen in your workspaces.
+    Optionally set a secret to verify webhook signatures.
+  </p>
+
+  {#if data.webhooks.length === 0}
+    <p class="hint">No webhooks configured yet.</p>
+  {:else}
+    {#each data.webhooks as wh (wh.id)}
+      <div class="row row-stretch">
+        <div>
+          <div class="webhook-url">{wh.url}</div>
+          <div class="event-badges" style="margin-top: var(--space-1);">
+            {#each wh.events as ev}
+              <Badge variant="muted" size="sm">{ev}</Badge>
+            {/each}
+          </div>
+          <p class="hint">added {new Date(wh.created_at).toLocaleDateString()}{wh.secret_hash ? ' · signed' : ''}</p>
+        </div>
+        <div class="webhook-actions">
+          <form method="POST" action="?/testWebhook" class="inline-form">
+            <input type="hidden" name="id" value={wh.id} />
+            <button type="submit" class="ghost">Test</button>
+          </form>
+          <form method="POST" action="?/deleteWebhook" class="inline-form" onsubmit={(e) => !confirm('Delete this webhook?') && e.preventDefault()}>
+            <input type="hidden" name="id" value={wh.id} />
+            <button type="submit" class="ghost">Delete</button>
+          </form>
+        </div>
+      </div>
+    {/each}
+  {/if}
+
+  {#if form?.webhookTested}<p class="form-success">Test event sent.</p>{/if}
+  {#if form?.webhookDeleted}<p class="form-success">Webhook deleted.</p>{/if}
+
+  <form method="POST" action="?/addWebhook" style="margin-top: var(--space-4);">
+    <div class="field">
+      <label for="wh-url">Payload URL</label>
+      <input id="wh-url" name="url" type="url" required
+             placeholder="https://example.com/webhook"
+             value={form?.webhookUrl || ''} />
+    </div>
+    <fieldset class="field" style="border: none; padding: 0; margin: 0 0 1rem 0;">
+      <legend style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: var(--text-muted);">Events</legend>
+      <div class="checkbox-group">
+        {#each WEBHOOK_EVENTS as ev}
+          <label>
+            <input type="checkbox" name="events" value={ev} />
+            {ev}
+          </label>
+        {/each}
+      </div>
+    </fieldset>
+    <div class="field">
+      <label for="wh-secret">Secret (optional)</label>
+      <input id="wh-secret" name="secret" type="password" autocomplete="off"
+             placeholder="Used for HMAC signature verification" />
+    </div>
+    {#if form?.webhookError}<p class="form-error">{form.webhookError}</p>{/if}
+    {#if form?.webhookAdded}<p class="form-success">Webhook created.</p>{/if}
+    <button type="submit">Add webhook</button>
+  </form>
+</Panel>
+
+<Panel title="Push notifications">
+  {#if !pushSupported}
+    <div class="push-info">
+      Push notifications are not supported in this browser. Use a modern browser with
+      service worker support to enable push notifications.
+    </div>
+  {:else}
+    <p class="hint">
+      Receive browser push notifications for workspace events.
+      You can manage subscriptions across all your devices.
+    </p>
+
+    <div style="margin: var(--space-3) 0;">
+      <button type="button" onclick={enablePush} disabled={pushLoading}>
+        {pushLoading ? 'Subscribing...' : 'Enable push notifications'}
+      </button>
+    </div>
+
+    {#if pushError}
+      <p class="form-error">{pushError}</p>
+    {/if}
+    {#if form?.pushSubscribed}<p class="form-success">Push notifications enabled.</p>{/if}
+    {#if form?.pushUnsubscribed}<p class="form-success">Push notifications disabled.</p>{/if}
+    {#if form?.pushError}<p class="form-error">{form.pushError}</p>{/if}
+    {#if form?.pushSubDeleted}<p class="form-success">Subscription removed.</p>{/if}
+
+    {#if data.pushSubscriptions.length > 0}
+      <p class="hint" style="margin-top: var(--space-4);">Active subscriptions ({data.pushSubscriptions.length}):</p>
+      {#each data.pushSubscriptions as sub (sub.id)}
+        <div class="row row-stretch">
+          <div>
+            <span class="push-endpoint">{truncateEndpoint(sub.endpoint)}</span>
+            <p class="hint">registered {new Date(sub.created_at).toLocaleDateString()}</p>
+          </div>
+          <form method="POST" action="?/deletePushSubscription" class="inline-form" onsubmit={(e) => !confirm('Remove this push subscription?') && e.preventDefault()}>
+            <input type="hidden" name="id" value={sub.id} />
+            <button type="submit" class="ghost">Remove</button>
+          </form>
+        </div>
+      {/each}
+    {:else}
+      <p class="hint" style="margin-top: var(--space-3);">No active push subscriptions.</p>
+    {/if}
+  {/if}
 </Panel>

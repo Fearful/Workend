@@ -1,4 +1,4 @@
-import { redirect, error } from "@sveltejs/kit";
+import { fail, redirect, error } from "@sveltejs/kit";
 import { a as apiFetch } from "../../../chunks/api.js";
 const SESSION_COOKIE = "workend_session";
 const load = async ({ locals, cookies }) => {
@@ -15,6 +15,25 @@ const load = async ({ locals, cookies }) => {
     audit: auditResult.ok ? auditResult.data ?? [] : []
   };
 };
+const actions = {
+  setRetention: async ({ request, cookies }) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : void 0;
+    const data = await request.formData();
+    const days = parseInt(String(data.get("days") || ""), 10);
+    if (isNaN(days) || days < 1) {
+      return fail(400, { retentionError: "A valid number of days is required (minimum 1)" });
+    }
+    const result = await apiFetch("/api/admin/audit-log/retention", {
+      method: "POST",
+      body: { days },
+      cookie: cookieHeader
+    });
+    if (!result.ok) return fail(result.status, { retentionError: result.error || "failed to set retention" });
+    return { retentionSet: true, retentionDays: days };
+  }
+};
 export {
+  actions,
   load
 };

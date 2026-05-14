@@ -12,7 +12,7 @@ type OptionalUnion<U extends Record<string, any>, A extends keyof U = U extends 
 export type Snapshot<T = any> = Kit.Snapshot<T>;
 type PageServerParentData = Omit<EnsureDefined<import('../../$types.js').LayoutServerData>, keyof LayoutServerData> & EnsureDefined<LayoutServerData>;
 type PageParentData = Omit<EnsureDefined<import('../../$types.js').LayoutData>, keyof LayoutData> & EnsureDefined<LayoutData>;
-type LayoutRouteId = RouteId | "/projects/[id]" | "/projects/[id]/board" | "/projects/[id]/branches" | "/projects/[id]/images" | "/projects/[id]/pipelines" | "/projects/[id]/runs" | "/projects/[id]/schedules" | "/projects/[id]/trends"
+type LayoutRouteId = RouteId | "/projects/[id]" | "/projects/[id]/blame" | "/projects/[id]/board" | "/projects/[id]/branches" | "/projects/[id]/images" | "/projects/[id]/monorepo" | "/projects/[id]/pipelines" | "/projects/[id]/previews" | "/projects/[id]/runs" | "/projects/[id]/schedules" | "/projects/[id]/trends"
 type LayoutParams = RouteParams & { id?: string }
 type LayoutServerParentData = EnsureDefined<import('../../$types.js').LayoutServerData>;
 type LayoutParentData = EnsureDefined<import('../../$types.js').LayoutData>;

@@ -8,7 +8,9 @@ import "../../../../chunks/state.svelte.js";
 import { s as shortSha } from "../../../../chunks/utils2.js";
 import { B as Breadcrumb } from "../../../../chunks/Breadcrumb.js";
 import { p as page } from "../../../../chunks/index2.js";
-import { S as StatusDot } from "../../../../chunks/StatusDot.js";
+import { S as StatusPill } from "../../../../chunks/StatusPill.js";
+import { T as TimeAgo } from "../../../../chunks/TimeAgo.js";
+import { T as Tooltip } from "../../../../chunks/Tooltip.js";
 import { M as Modal } from "../../../../chunks/Modal.js";
 function ProjectTabs($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
@@ -22,6 +24,11 @@ function ProjectTabs($$renderer, $$props) {
       {
         label: "Runs",
         path: `/projects/${projectID}/runs`,
+        match: "prefix"
+      },
+      {
+        label: "Pipelines",
+        path: `/projects/${projectID}/pipelines`,
         match: "prefix"
       },
       {
@@ -67,11 +74,13 @@ function _layout($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
     let { data, children } = $$props;
     function shortSha$1(sha) {
-      return shortSha(sha, 12);
+      return shortSha(sha, 7);
     }
     let deleteModal = false;
     let deletePending = false;
     let syncPending = false;
+    let actionsMenuOpen = false;
+    $$renderer2.push(`<div class="project-shell svelte-j0mxji">`);
     Breadcrumb($$renderer2, {
       segments: [
         { label: "workspaces", href: "/" },
@@ -85,18 +94,58 @@ function _layout($$renderer, $$props) {
       ]
     });
     $$renderer2.push(`<!----> <div class="header-row svelte-j0mxji"><h1 class="svelte-j0mxji">`);
-    StatusDot($$renderer2, { status: data.project.status, size: 10 });
-    $$renderer2.push(`<!----> ${escape_html(data.project.name)}</h1> <div class="actions-bar svelte-j0mxji"><button type="button"${attr("disabled", syncPending, true)}>${escape_html("Sync")}</button> <button type="button" class="ghost">Delete</button></div></div> <div class="status-strip svelte-j0mxji"><span><strong class="svelte-j0mxji">${escape_html(data.project.status)}</strong></span> <span class="sep svelte-j0mxji">·</span> <span>branch <strong class="svelte-j0mxji">${escape_html(data.project.default_branch || "—")}</strong></span> `);
+    StatusPill($$renderer2, { status: data.project.status });
+    $$renderer2.push(`<!----> <span class="name svelte-j0mxji">${escape_html(data.project.name)}</span></h1> <div class="actions-bar svelte-j0mxji"><button type="button"${attr("disabled", syncPending, true)} class="desktop-only svelte-j0mxji">${escape_html("Sync")}</button> <div class="more-menu-wrap svelte-j0mxji"><button type="button" class="more-btn svelte-j0mxji" aria-haspopup="menu"${attr("aria-expanded", actionsMenuOpen)} title="Project actions">⋯</button> `);
+    {
+      $$renderer2.push("<!--[-1-->");
+    }
+    $$renderer2.push(`<!--]--></div></div></div> <div class="ribbon svelte-j0mxji"><span class="ribbon-item svelte-j0mxji"><span class="label svelte-j0mxji">Branch</span> `);
+    Tooltip($$renderer2, {
+      text: data.project.default_branch || "No default branch detected",
+      children: ($$renderer3) => {
+        $$renderer3.push(`<span class="val mono svelte-j0mxji">${escape_html(data.project.default_branch || "—")}</span>`);
+      }
+    });
+    $$renderer2.push(`<!----></span> <span class="ribbon-sep svelte-j0mxji">·</span> `);
     if (data.project.last_commit_sha) {
       $$renderer2.push("<!--[0-->");
-      $$renderer2.push(`<span class="sep svelte-j0mxji">·</span> <span>commit <strong class="svelte-j0mxji">${escape_html(shortSha$1(data.project.last_commit_sha))}</strong></span>`);
+      $$renderer2.push(`<span class="ribbon-item svelte-j0mxji"><span class="label svelte-j0mxji">Commit</span> `);
+      {
+        let content = function($$renderer3) {
+          $$renderer3.push(`<div class="commit-tip svelte-j0mxji"><div class="mono svelte-j0mxji">${escape_html(data.project.last_commit_sha)}</div> `);
+          if (data.project.last_commit_author) {
+            $$renderer3.push("<!--[0-->");
+            $$renderer3.push(`<div class="author svelte-j0mxji">${escape_html(data.project.last_commit_author)}</div>`);
+          } else {
+            $$renderer3.push("<!--[-1-->");
+          }
+          $$renderer3.push(`<!--]--> `);
+          if (data.project.last_commit_message) {
+            $$renderer3.push("<!--[0-->");
+            $$renderer3.push(`<div class="msg svelte-j0mxji">${escape_html(data.project.last_commit_message)}</div>`);
+          } else {
+            $$renderer3.push("<!--[-1-->");
+          }
+          $$renderer3.push(`<!--]--></div>`);
+        };
+        Tooltip($$renderer2, {
+          placement: "bottom",
+          content,
+          children: ($$renderer3) => {
+            $$renderer3.push(`<span class="val mono svelte-j0mxji">${escape_html(shortSha$1(data.project.last_commit_sha))}</span>`);
+          }
+        });
+      }
+      $$renderer2.push(`<!----></span> <span class="ribbon-sep svelte-j0mxji">·</span>`);
     } else {
       $$renderer2.push("<!--[-1-->");
     }
     $$renderer2.push(`<!--]--> `);
     if (data.project.last_synced_at) {
       $$renderer2.push("<!--[0-->");
-      $$renderer2.push(`<span class="sep svelte-j0mxji">·</span> <span>synced ${escape_html(new Date(data.project.last_synced_at).toLocaleString())}</span>`);
+      $$renderer2.push(`<span class="ribbon-item svelte-j0mxji"><span class="label svelte-j0mxji">Synced</span> <span class="val svelte-j0mxji">`);
+      TimeAgo($$renderer2, { value: data.project.last_synced_at });
+      $$renderer2.push(`<!----></span></span>`);
     } else {
       $$renderer2.push("<!--[-1-->");
     }
@@ -108,7 +157,7 @@ function _layout($$renderer, $$props) {
     }
     $$renderer2.push(`<!--]--> `);
     children($$renderer2);
-    $$renderer2.push(`<!----> `);
+    $$renderer2.push(`<!----></div> `);
     Modal($$renderer2, {
       open: deleteModal,
       title: "Delete project?",

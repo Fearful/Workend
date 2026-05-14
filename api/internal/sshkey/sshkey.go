@@ -25,10 +25,12 @@ import (
 // Key is what the API returns to the UI. The private key is never echoed
 // back; only the derived public key.
 type Key struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	PublicKey string    `json:"public_key"`
-	CreatedAt time.Time `json:"created_at"`
+	ID            uuid.UUID  `json:"id"`
+	Name          string     `json:"name"`
+	PublicKey     string     `json:"public_key"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ExpiresAt     *time.Time `json:"expires_at"`
+	LastRotatedAt *time.Time `json:"last_rotated_at"`
 }
 
 type Handlers struct {
@@ -41,7 +43,7 @@ type Handlers struct {
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	uid := auth.UserID(r.Context())
 	rows, err := h.Pool.Query(r.Context(), `
-		SELECT id, name, public_key, created_at
+		SELECT id, name, public_key, created_at, expires_at, last_rotated_at
 		FROM user_ssh_keys WHERE user_id = $1 ORDER BY created_at DESC
 	`, uid)
 	if err != nil {
@@ -52,7 +54,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	out := []Key{}
 	for rows.Next() {
 		var k Key
-		if err := rows.Scan(&k.ID, &k.Name, &k.PublicKey, &k.CreatedAt); err != nil {
+		if err := rows.Scan(&k.ID, &k.Name, &k.PublicKey, &k.CreatedAt, &k.ExpiresAt, &k.LastRotatedAt); err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -75,8 +77,9 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name       string `json:"name"`
-		PrivateKey string `json:"private_key"`
+		Name       string     `json:"name"`
+		PrivateKey string     `json:"private_key"`
+		ExpiresAt  *time.Time `json:"expires_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -110,10 +113,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	var k Key
 	err = h.Pool.QueryRow(r.Context(), `
-		INSERT INTO user_ssh_keys (user_id, name, encrypted_private_key, public_key)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, name, public_key, created_at
-	`, uid, req.Name, enc, pubKey).Scan(&k.ID, &k.Name, &k.PublicKey, &k.CreatedAt)
+		INSERT INTO user_ssh_keys (user_id, name, encrypted_private_key, public_key, expires_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, name, public_key, created_at, expires_at, last_rotated_at
+	`, uid, req.Name, enc, pubKey, req.ExpiresAt).Scan(&k.ID, &k.Name, &k.PublicKey, &k.CreatedAt, &k.ExpiresAt, &k.LastRotatedAt)
 	if err != nil {
 		if strings.Contains(err.Error(), "user_ssh_keys_user_name_idx") {
 			http.Error(w, "you already have a key with that name", http.StatusConflict)
@@ -147,6 +150,43 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// RotateKey marks a key as rotated by setting last_rotated_at = now().
+// Optionally updates expires_at from the request body.
+// POST /api/me/ssh-keys/:id/rotate
+func (h *Handlers) RotateKey(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		ExpiresAt *time.Time `json:"expires_at"`
+	}
+	// Body is optional; ignore decode errors for empty bodies.
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	var k Key
+	err = h.Pool.QueryRow(r.Context(), `
+		UPDATE user_ssh_keys
+		SET last_rotated_at = now(),
+		    expires_at = COALESCE($1, expires_at)
+		WHERE id = $2 AND user_id = $3
+		RETURNING id, name, public_key, created_at, expires_at, last_rotated_at
+	`, body.ExpiresAt, id, uid).Scan(&k.ID, &k.Name, &k.PublicKey, &k.CreatedAt, &k.ExpiresAt, &k.LastRotatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(k)
 }
 
 // LookupAnyKeyForUser returns the decrypted private-key bytes of any one

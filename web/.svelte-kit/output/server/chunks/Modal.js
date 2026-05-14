@@ -1,4 +1,5 @@
 import { a as attr, f as attr_style, e as escape_html, s as stringify } from "./renderer.js";
+/* empty css                                    */
 function Modal($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
     let { open, title, width = 420, onClose, children, footer } = $$props;

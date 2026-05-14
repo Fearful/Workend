@@ -54,6 +54,11 @@
 		"src/routes/projects/[id]/+layout.server.ts",
 		"src/routes/+layout.server.ts"
 	],
+	"/projects/[id]/blame": [
+		"src/routes/projects/[id]/blame/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
 	"/projects/[id]/board": [
 		"src/routes/projects/[id]/board/+page.server.ts",
 		"src/routes/projects/[id]/+layout.server.ts",
@@ -69,8 +74,18 @@
 		"src/routes/projects/[id]/+layout.server.ts",
 		"src/routes/+layout.server.ts"
 	],
+	"/projects/[id]/monorepo": [
+		"src/routes/projects/[id]/monorepo/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
 	"/projects/[id]/pipelines": [
 		"src/routes/projects/[id]/pipelines/+page.server.ts",
+		"src/routes/projects/[id]/+layout.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/projects/[id]/previews": [
+		"src/routes/projects/[id]/previews/+page.server.ts",
 		"src/routes/projects/[id]/+layout.server.ts",
 		"src/routes/+layout.server.ts"
 	],
@@ -103,6 +118,14 @@
 	"/runs/[id]/log-stream": [
 		"src/routes/runs/[id]/log-stream/+server.ts"
 	],
+	"/sandboxes": [
+		"src/routes/sandboxes/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/sandboxes/[id]": [
+		"src/routes/sandboxes/[id]/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
 	"/settings": [
 		"src/routes/settings/+page.server.ts",
 		"src/routes/+layout.server.ts"
@@ -123,12 +146,24 @@
 		"src/routes/workspaces/[id]/+page.server.ts",
 		"src/routes/+layout.server.ts"
 	],
+	"/workspaces/[id]/activity": [
+		"src/routes/workspaces/[id]/activity/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
 	"/workspaces/[id]/dashboard": [
 		"src/routes/workspaces/[id]/dashboard/+page.server.ts",
 		"src/routes/+layout.server.ts"
 	],
 	"/workspaces/[id]/projects/new": [
 		"src/routes/workspaces/[id]/projects/new/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/workspaces/[id]/roles": [
+		"src/routes/workspaces/[id]/roles/+page.server.ts",
+		"src/routes/+layout.server.ts"
+	],
+	"/workspaces/[id]/secrets": [
+		"src/routes/workspaces/[id]/secrets/+page.server.ts",
 		"src/routes/+layout.server.ts"
 	]
 }

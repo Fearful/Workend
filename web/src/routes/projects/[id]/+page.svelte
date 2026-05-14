@@ -128,6 +128,247 @@
   let servicesModal = $state<{ taskID: string; taskName: string; raw: string; error: string | null } | null>(null);
   let artifactsModal = $state<{ taskID: string; taskName: string; raw: string; error: string | null } | null>(null);
 
+  // -- Blame timeline state --
+  let syncingCommits = $state(false);
+  let blameDetailModal = $state<{
+    sha: string;
+    loading: boolean;
+    commit: { sha: string; author: string; author_email: string; message: string; committed_at: string; files_changed: number; insertions: number; deletions: number } | null;
+    runs: { id: string; status: string; started_at: string | null; finished_at: string | null; duration_ms: number }[];
+    error: string | null;
+  } | null>(null);
+
+  async function syncCommits() {
+    if (syncingCommits) return;
+    syncingCommits = true;
+    try {
+      const r = await fetch(`/projects/${data.project.id}?/syncCommits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: ''
+      });
+      if (!r.ok) return;
+      await invalidateAll();
+    } finally {
+      syncingCommits = false;
+    }
+  }
+
+  async function openBlameDetail(sha: string) {
+    blameDetailModal = { sha, loading: true, commit: null, runs: [], error: null };
+    try {
+      const r = await fetch(`/api/commits/${sha}`, { credentials: 'same-origin' });
+      if (!r.ok) {
+        if (blameDetailModal) blameDetailModal = { ...blameDetailModal, loading: false, error: `HTTP ${r.status}` };
+        return;
+      }
+      const json = await r.json() as { commit: typeof blameDetailModal.commit; runs: typeof blameDetailModal.runs };
+      if (blameDetailModal) {
+        blameDetailModal = { ...blameDetailModal, loading: false, commit: json.commit, runs: json.runs ?? [] };
+      }
+    } catch (err) {
+      if (blameDetailModal) {
+        blameDetailModal = { ...blameDetailModal, loading: false, error: err instanceof Error ? err.message : 'failed' };
+      }
+    }
+  }
+
+  function blameRowColor(c: { run_count: number; pass_count: number; fail_count: number }): string {
+    if (c.run_count === 0) return '';
+    if (c.fail_count > 0) return 'blame-fail';
+    return 'blame-pass';
+  }
+
+  // -- Monorepo state --
+  let detectingPackages = $state(false);
+  let autoMapping = $state(false);
+  let packageDetailModal = $state<{
+    id: string;
+    loading: boolean;
+    pkg: { id: string; name: string; path: string; pkg_type: string } | null;
+    scopes: { id: string; task_id: string; task_name: string }[];
+    error: string | null;
+  } | null>(null);
+
+  async function detectPackages() {
+    if (detectingPackages) return;
+    detectingPackages = true;
+    try {
+      const r = await fetch(`/projects/${data.project.id}?/detectPackages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: ''
+      });
+      if (!r.ok) return;
+      await invalidateAll();
+    } finally {
+      detectingPackages = false;
+    }
+  }
+
+  async function autoMapTasks() {
+    if (autoMapping) return;
+    autoMapping = true;
+    try {
+      const r = await fetch(`/projects/${data.project.id}?/autoMapTasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: ''
+      });
+      if (!r.ok) return;
+      await invalidateAll();
+    } finally {
+      autoMapping = false;
+    }
+  }
+
+  async function openPackageDetail(pkgID: string) {
+    packageDetailModal = { id: pkgID, loading: true, pkg: null, scopes: [], error: null };
+    try {
+      const r = await fetch(`/api/packages/${pkgID}`, { credentials: 'same-origin' });
+      if (!r.ok) {
+        if (packageDetailModal) packageDetailModal = { ...packageDetailModal, loading: false, error: `HTTP ${r.status}` };
+        return;
+      }
+      const json = await r.json() as { id: string; name: string; path: string; pkg_type: string; scopes: { id: string; task_id: string; task_name: string }[] };
+      if (packageDetailModal) {
+        packageDetailModal = { ...packageDetailModal, loading: false, pkg: json, scopes: json.scopes ?? [] };
+      }
+    } catch (err) {
+      if (packageDetailModal) {
+        packageDetailModal = { ...packageDetailModal, loading: false, error: err instanceof Error ? err.message : 'failed' };
+      }
+    }
+  }
+
+  async function addTaskScope(pkgID: string, taskID: string) {
+    const r = await fetch(`/api/packages/${pkgID}/task-scopes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskID }),
+      credentials: 'same-origin'
+    });
+    if (r.ok) {
+      await openPackageDetail(pkgID);
+      await invalidateAll();
+    }
+  }
+
+  async function removeTaskScope(scopeID: string) {
+    const r = await fetch(`/api/task-scopes/${scopeID}`, {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
+    if (r.ok && packageDetailModal) {
+      await openPackageDetail(packageDetailModal.id);
+      await invalidateAll();
+    }
+  }
+
+  function pkgTypeBadgeVariant(t: string): 'info' | 'success' | 'warning' | 'danger' | 'muted' | 'accent' {
+    switch (t) {
+      case 'npm': return 'accent';
+      case 'go': return 'info';
+      case 'cargo': return 'warning';
+      case 'python': return 'success';
+      case 'gradle': return 'danger';
+      default: return 'muted';
+    }
+  }
+
+  // -- Preview state --
+  let newPreviewBranch = $state('');
+  let previewActionPending = $state<string | null>(null);
+
+  async function redeployPreview(previewID: string) {
+    previewActionPending = previewID;
+    try {
+      await fetch(`/api/previews/${previewID}/redeploy`, { method: 'POST', credentials: 'same-origin' });
+      await invalidateAll();
+    } finally {
+      previewActionPending = null;
+    }
+  }
+
+  async function stopPreview(previewID: string) {
+    previewActionPending = previewID;
+    try {
+      await fetch(`/api/previews/${previewID}/stop`, { method: 'POST', credentials: 'same-origin' });
+      await invalidateAll();
+    } finally {
+      previewActionPending = null;
+    }
+  }
+
+  let previewDeleteConfirm = $state<string | null>(null);
+
+  async function deletePreview(previewID: string) {
+    previewActionPending = previewID;
+    try {
+      await fetch(`/api/previews/${previewID}`, { method: 'DELETE', credentials: 'same-origin' });
+      previewDeleteConfirm = null;
+      await invalidateAll();
+    } finally {
+      previewActionPending = null;
+    }
+  }
+
+  async function toggleAutoDeploy(previewID: string, current: boolean) {
+    await fetch(`/api/previews/${previewID}/auto-deploy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: !current }),
+      credentials: 'same-origin'
+    });
+    await invalidateAll();
+  }
+
+  // -- Task metrics state --
+  let metricsModal = $state<{
+    taskID: string;
+    taskName: string;
+    loading: boolean;
+    metrics: { avg_duration_ms: number; p50_ms: number; p95_ms: number; p99_ms: number; total_runs: number; success_rate: number; last_30d_runs: number } | null;
+    trends: { date: string; count: number; passed: number; failed: number; avg_ms: number }[];
+    error: string | null;
+  } | null>(null);
+
+  async function openTaskMetrics(taskID: string, taskName: string) {
+    metricsModal = { taskID, taskName, loading: true, metrics: null, trends: [], error: null };
+    try {
+      const [metricsRes, trendsRes] = await Promise.all([
+        fetch(`/api/tasks/${taskID}/metrics`, { credentials: 'same-origin' }),
+        fetch(`/api/tasks/${taskID}/metrics/trends`, { credentials: 'same-origin' })
+      ]);
+      if (!metricsRes.ok) {
+        if (metricsModal) metricsModal = { ...metricsModal, loading: false, error: `HTTP ${metricsRes.status}` };
+        return;
+      }
+      const metricsData = await metricsRes.json();
+      const trendsData = trendsRes.ok ? await trendsRes.json() : [];
+      if (metricsModal) {
+        metricsModal = { ...metricsModal, loading: false, metrics: metricsData, trends: Array.isArray(trendsData) ? trendsData : [] };
+      }
+    } catch (err) {
+      if (metricsModal) {
+        metricsModal = { ...metricsModal, loading: false, error: err instanceof Error ? err.message : 'failed' };
+      }
+    }
+  }
+
+  function formatMs(ms: number): string {
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${(ms / 60000).toFixed(1)}m`;
+  }
+
+  // -- Alert rule state --
+  let alertFormOpen = $state(false);
+  let alertFormTaskID = $state('');
+  let alertFormType = $state('duration');
+  let alertFormThreshold = $state('');
+  let alertFormComparison = $state('gt');
+
   function openParams(taskID: string, taskName: string) {
     runError = null;
     paramsModal = { taskID, taskName, env: '', args: '' };
@@ -393,7 +634,7 @@
   }
 
   // ---- Panel reordering ----
-  const PANEL_KEYS = ['tasks', 'recent-runs', 'repository', 'latest-commit', 'code-stats', 'about', 'contributors', 'pipelines', 'pipeline-configs', 'compose'] as const;
+  const PANEL_KEYS = ['tasks', 'recent-runs', 'repository', 'latest-commit', 'code-stats', 'about', 'contributors', 'pipelines', 'pipeline-configs', 'compose', 'blame-timeline', 'monorepo', 'previews', 'alert-rules', 'impact-radar', 'dependency-tree', 'live-run'] as const;
   type PanelKey = typeof PANEL_KEYS[number];
   const STORAGE_KEY = 'workend.project-overview-layout';
   const LEGACY_STORAGE_KEY = 'workend.project-overview-order';
@@ -489,6 +730,21 @@
         return !!data.overview?.readme;
       case 'contributors':
         return (data.overview?.contributors.length ?? 0) > 0;
+      case 'blame-timeline':
+        return data.blameTimeline.length > 0;
+      case 'monorepo':
+        return data.monorepoPackages.length > 0;
+      case 'previews':
+        return data.previews.length > 0;
+      case 'alert-rules':
+        return data.alertRules.length > 0 || data.widgetAlertRules.length > 0;
+      case 'impact-radar':
+        return data.impactRadar != null && data.impactRadar.tasks.length > 0;
+      case 'dependency-tree':
+        return data.dependencyTree != null &&
+          (data.dependencyTree.upstream.length > 0 || data.dependencyTree.downstream.length > 0);
+      case 'live-run':
+        return data.liveRun != null;
     }
   }
 
@@ -508,7 +764,14 @@
       'pipeline-configs': 'CI/CD configuration',
       compose: 'Docker Compose',
       about: 'About',
-      contributors: 'Contributors'
+      contributors: 'Contributors',
+      'blame-timeline': 'Blame timeline',
+      monorepo: 'Monorepo packages',
+      previews: 'Deploy previews',
+      'alert-rules': 'Alert rules',
+      'impact-radar': 'Impact radar',
+      'dependency-tree': 'Dependency tree',
+      'live-run': 'Live run'
     } as Record<PanelKey, string>)[key];
   }
 
@@ -523,7 +786,14 @@
       'pipeline-configs': 'CI configs',
       compose: 'a Docker Compose file',
       about: 'a README',
-      contributors: 'commit history'
+      contributors: 'commit history',
+      'blame-timeline': 'synced commits',
+      monorepo: 'detected packages',
+      previews: 'deploy previews',
+      'alert-rules': 'alert rules',
+      'impact-radar': 'impact data',
+      'dependency-tree': 'dependency data',
+      'live-run': 'a running task'
     } as Record<PanelKey, string>)[key];
   }
 
@@ -1188,9 +1458,413 @@
     grid-template-columns: 1fr 1fr;
     gap: var(--space-3);
   }
+
+  /* Favorite button */
+  .favorite-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--space-3);
+  }
+  .favorite-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.875rem;
+    line-height: 1;
+    transition: color 80ms ease, border-color 80ms ease;
+  }
+  .favorite-btn:hover {
+    color: var(--warning);
+    border-color: var(--warning);
+  }
+  .favorite-btn.favorited {
+    color: var(--warning);
+    border-color: rgba(234, 179, 8, 0.4);
+    background: rgba(234, 179, 8, 0.08);
+  }
+  .favorite-label { font-size: 0.8125rem; }
+
+  /* Blame timeline */
+  .blame-table-wrap {
+    overflow-x: auto;
+    margin: 0 calc(-1 * var(--space-6));
+    padding: 0 var(--space-6);
+  }
+  .blame-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+  .blame-table th {
+    text-align: left;
+    color: var(--text-dim);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.375rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .blame-table th.num,
+  .blame-table td.num {
+    text-align: right;
+  }
+  .blame-table td {
+    padding: 0.5rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .blame-row {
+    cursor: pointer;
+    transition: background 80ms ease;
+  }
+  .blame-row:hover {
+    background: var(--bg-hover);
+  }
+  .blame-row.blame-pass {
+    border-left: 3px solid var(--success);
+  }
+  .blame-row.blame-fail {
+    border-left: 3px solid var(--danger-text);
+  }
+  .blame-author {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .blame-msg {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .blame-date {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+  }
+  .ins { color: var(--success); }
+  .del { color: var(--danger-text); }
+  .blame-runs {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .pass-count { color: var(--success); font-size: 0.6875rem; }
+  .fail-count { color: var(--danger-text); font-size: 0.6875rem; }
+
+  /* Monorepo packages */
+  .pkg-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .pkg-row:hover { background: var(--bg-hover); }
+  .pkg-row:last-child { border-bottom: none; }
+  .pkg-info { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; }
+  .pkg-name { font-family: var(--font-mono); font-size: 0.875rem; color: var(--text); }
+  .pkg-path { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
+  .pkg-tasks { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); white-space: nowrap; }
+
+  .scope-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.375rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.875rem;
+  }
+  .scope-row:last-child { border-bottom: none; }
+  .scope-name { font-family: var(--font-mono); }
+  .scope-add-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+  }
+
+  /* Deploy previews */
+  .preview-create-form {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+  .preview-branch-input {
+    flex: 1;
+    max-width: 240px;
+    font-size: 0.8125rem;
+  }
+  .preview-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .preview-row:last-child { border-bottom: none; }
+  .preview-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 1;
+    min-width: 0;
+  }
+  .preview-url {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--link);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .preview-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .auto-deploy-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  .auto-deploy-label { user-select: none; }
+  .preview-actions {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  /* Alert rules */
+  .alert-create-form {
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+  .alert-form-row {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .alert-form-row .field { flex: 1; min-width: 120px; }
+  .alert-form-row .field label { font-size: 0.75rem; }
+  .alert-form-row select,
+  .alert-form-row input { font-size: 0.8125rem; }
+  .alert-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
+    gap: var(--space-2);
+  }
+  .alert-row:last-child { border-bottom: none; }
+  .alert-info { display: flex; flex-direction: column; gap: 0.125rem; }
+  .alert-task-name { font-family: var(--font-mono); font-size: 0.875rem; color: var(--text); }
+  .alert-desc { font-size: 0.75rem; color: var(--text-dim); }
+  .alert-actions { display: flex; align-items: center; gap: var(--space-2); }
+
+  /* Impact radar */
+  .impact-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .impact-row:last-child { border-bottom: none; }
+  .impact-name {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .impact-patterns {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    flex: 1;
+    justify-content: flex-end;
+  }
+
+  /* Dependency tree */
+  .dep-section {
+    margin-bottom: var(--space-3);
+  }
+  .dep-section:last-child { margin-bottom: 0; }
+  .dep-heading {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-1);
+  }
+  .dep-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.375rem 0;
+    border-bottom: 1px solid var(--border);
+    color: inherit;
+    text-decoration: none;
+    font-size: 0.875rem;
+  }
+  .dep-row:hover { background: var(--bg-hover); text-decoration: none; }
+  .dep-row:last-child { border-bottom: none; }
+  .dep-name { font-family: var(--font-mono); color: var(--link); }
+
+  /* Live run */
+  .live-run-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+  .live-run-name {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--link);
+  }
+  .live-log-tail {
+    margin: 0;
+    padding: var(--space-3);
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* Task metrics modal */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-3);
+  }
+  .metric-card {
+    text-align: center;
+    padding: var(--space-3);
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+  .metric-num {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text);
+    font-family: var(--font-mono);
+  }
+  .metric-label {
+    font-size: 0.6875rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 0.125rem;
+  }
+  .success-rate-bar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .success-rate-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+  }
+  .success-rate-pct {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--text);
+  }
+  .rate-track {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .rate-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--success), #34d399);
+    border-radius: 4px;
+    transition: width 200ms ease;
+  }
+  .trend-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 64px;
+    padding: var(--space-1) 0;
+  }
+  .trend-bar-group {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+  }
+  .trend-bar {
+    width: 100%;
+    display: flex;
+    flex-direction: column-reverse;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .trend-pass {
+    background: var(--success);
+    min-height: 1px;
+  }
+  .trend-fail {
+    background: var(--danger-text);
+    min-height: 1px;
+  }
+
+  @media (max-width: 768px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .blame-table-wrap { margin: 0 calc(-1 * var(--space-4)); padding: 0 var(--space-4); }
+    .alert-form-row { flex-direction: column; }
+    .alert-form-row .field { min-width: 100%; }
+    .preview-row { flex-direction: column; align-items: flex-start; }
+    .preview-actions { width: 100%; }
+  }
 </style>
 
 {#if form?.error}<FlashMessage type="error">{form.error}</FlashMessage>{/if}
+
+<div class="favorite-row">
+  <form method="POST" action="?/toggleFavorite" class="inline-form">
+    <input type="hidden" name="is_favorited" value={String(data.isFavorited)} />
+    <button type="submit"
+            class="favorite-btn {data.isFavorited ? 'favorited' : ''}"
+            title={data.isFavorited ? 'Remove from favorites' : 'Add to favorites'}>
+      {data.isFavorited ? '★' : '☆'}
+      <span class="favorite-label">{data.isFavorited ? 'Favorited' : 'Favorite'}</span>
+    </button>
+  </form>
+</div>
 
 <div class="layout-toolbar">
   <span class="spacer"></span>
@@ -1277,6 +1951,10 @@
                 onclick={() => openArtifactsEditor(t.id, t.name, t.artifact_patterns ?? [])}>
           <span>Artifact patterns</span>
           <span class="menu-item-value">{formatArtifacts(t.artifact_patterns ?? [])}</span>
+        </button>
+        <button class="menu-item" type="button" role="menuitem"
+                onclick={() => { openMenuTaskID = null; openTaskMetrics(t.id, t.name); }}>
+          <span>View metrics</span>
         </button>
         <form method="POST" action="?/toggleApproval" class="inline-form" style="display:contents;"
               onsubmit={() => { openMenuTaskID = null; }}>
@@ -1552,6 +2230,291 @@
   {/if}
 {/snippet}
 
+{#snippet panelBlameTimeline()}
+  <Panel title="Blame timeline">
+    {#snippet actions()}
+      <button type="button" class="ghost" style="font-size: 0.75rem;" onclick={syncCommits} disabled={syncingCommits}>
+        {syncingCommits ? 'Syncing...' : 'Sync commits'}
+      </button>
+    {/snippet}
+    {#if data.blameTimeline.length === 0}
+      <div class="empty">No commits synced yet. Click "Sync commits" to populate the timeline.</div>
+    {:else}
+      <div class="blame-table-wrap">
+        <table class="blame-table">
+          <thead>
+            <tr>
+              <th>SHA</th>
+              <th>Author</th>
+              <th>Message</th>
+              <th>Date</th>
+              <th class="num">Files</th>
+              <th class="num">+/-</th>
+              <th class="num">Runs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each data.blameTimeline as c (c.sha)}
+              <tr class="blame-row {blameRowColor(c)}" onclick={() => openBlameDetail(c.sha)} role="button" tabindex="0">
+                <td class="mono">{c.sha.slice(0, 8)}</td>
+                <td class="blame-author">{c.author}</td>
+                <td class="blame-msg">{c.message.split('\n')[0].slice(0, 72)}</td>
+                <td class="blame-date"><TimeAgo value={c.committed_at} /></td>
+                <td class="num">{c.files_changed}</td>
+                <td class="num"><span class="ins">+{c.insertions}</span> <span class="del">-{c.deletions}</span></td>
+                <td class="num">
+                  {#if c.run_count > 0}
+                    <span class="blame-runs">
+                      {c.run_count}
+                      {#if c.pass_count > 0}<span class="pass-count">{c.pass_count}p</span>{/if}
+                      {#if c.fail_count > 0}<span class="fail-count">{c.fail_count}f</span>{/if}
+                    </span>
+                  {:else}
+                    <span class="dim">--</span>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
+  </Panel>
+{/snippet}
+
+{#snippet panelMonorepo()}
+  <Panel title="Monorepo packages">
+    {#snippet actions()}
+      <button type="button" class="ghost" style="font-size: 0.75rem;" onclick={detectPackages} disabled={detectingPackages}>
+        {detectingPackages ? 'Detecting...' : 'Detect packages'}
+      </button>
+      {#if data.monorepoPackages.length > 0}
+        <button type="button" class="ghost" style="font-size: 0.75rem;" onclick={autoMapTasks} disabled={autoMapping}>
+          {autoMapping ? 'Mapping...' : 'Auto-map tasks'}
+        </button>
+      {/if}
+    {/snippet}
+    {#if data.monorepoPackages.length === 0}
+      <div class="empty">No packages detected. Click "Detect packages" to scan for monorepo packages.</div>
+    {:else}
+      {#each data.monorepoPackages as pkg (pkg.id)}
+        <div class="pkg-row" onclick={() => openPackageDetail(pkg.id)} onkeydown={(e) => { if (e.key === 'Enter') openPackageDetail(pkg.id); }} role="button" tabindex="0">
+          <div class="pkg-info">
+            <span class="pkg-name">{pkg.name}</span>
+            <span class="pkg-path">{pkg.path}</span>
+          </div>
+          <Badge variant={pkgTypeBadgeVariant(pkg.pkg_type)} size="sm">{pkg.pkg_type}</Badge>
+          <span class="pkg-tasks">{pkg.task_count} task{pkg.task_count === 1 ? '' : 's'}</span>
+        </div>
+      {/each}
+    {/if}
+  </Panel>
+{/snippet}
+
+{#snippet panelPreviews()}
+  <Panel title="Deploy previews">
+    {#snippet actions()}
+      <span class="filter-count">{data.previews.length} preview{data.previews.length === 1 ? '' : 's'}</span>
+    {/snippet}
+    <form method="POST" action="?/createPreview" class="preview-create-form">
+      <input type="text" name="branch" placeholder="Branch name" class="preview-branch-input" bind:value={newPreviewBranch} />
+      <button type="submit" disabled={!newPreviewBranch.trim()}>New preview</button>
+    </form>
+    {#if data.previews.length === 0}
+      <div class="empty" style="padding: var(--space-4) 0;">No deploy previews yet.</div>
+    {:else}
+      {#each data.previews as p (p.id)}
+        <div class="preview-row">
+          <div class="preview-info">
+            <StatusPill status={p.status === 'deployed' ? 'ready' : p.status === 'deploying' ? 'cloning' : p.status === 'stopped' ? 'cancelled' : p.status === 'failed' ? 'failed' : 'pending'} size="sm" />
+            <Badge variant="info" size="sm">{p.branch}</Badge>
+            {#if p.url}
+              <a href={p.url} target="_blank" rel="noopener noreferrer" class="preview-url">{p.url}</a>
+            {/if}
+          </div>
+          <div class="preview-meta">
+            {#if p.last_deployed_at}
+              <span class="dim"><TimeAgo value={p.last_deployed_at} /></span>
+            {/if}
+            <label class="auto-deploy-toggle" title="Auto-deploy on push">
+              <input type="checkbox"
+                     checked={p.auto_deploy}
+                     onchange={() => toggleAutoDeploy(p.id, p.auto_deploy)} />
+              <span class="auto-deploy-label">Auto</span>
+            </label>
+          </div>
+          <div class="preview-actions">
+            <button type="button" class="ghost" style="font-size: 0.75rem;"
+                    onclick={() => redeployPreview(p.id)}
+                    disabled={previewActionPending === p.id}>Redeploy</button>
+            {#if p.status === 'deployed' || p.status === 'deploying'}
+              <button type="button" class="ghost" style="font-size: 0.75rem;"
+                      onclick={() => stopPreview(p.id)}
+                      disabled={previewActionPending === p.id}>Stop</button>
+            {/if}
+            {#if previewDeleteConfirm === p.id}
+              <button type="button" class="danger" style="font-size: 0.75rem;"
+                      onclick={() => deletePreview(p.id)}
+                      disabled={previewActionPending === p.id}>Confirm delete</button>
+              <button type="button" class="ghost" style="font-size: 0.75rem;"
+                      onclick={() => (previewDeleteConfirm = null)}>Cancel</button>
+            {:else}
+              <button type="button" class="ghost danger" style="font-size: 0.75rem;"
+                      onclick={() => (previewDeleteConfirm = p.id)}>Delete</button>
+            {/if}
+          </div>
+        </div>
+      {/each}
+    {/if}
+  </Panel>
+{/snippet}
+
+{#snippet panelAlertRules()}
+  <Panel title="Alert rules">
+    {#snippet actions()}
+      <button type="button" class="ghost" style="font-size: 0.75rem;" onclick={() => (alertFormOpen = !alertFormOpen)}>
+        {alertFormOpen ? 'Cancel' : 'New rule'}
+      </button>
+    {/snippet}
+    {#if alertFormOpen}
+      <form method="POST" action="?/createAlertRule" class="alert-create-form" onsubmit={() => { alertFormOpen = false; }}>
+        <div class="alert-form-row">
+          <div class="field">
+            <label for="alert-task">Task</label>
+            <select id="alert-task" name="task_id" bind:value={alertFormTaskID} required>
+              <option value="">Select task...</option>
+              {#each data.tasks as t (t.id)}
+                <option value={t.id}>{t.name}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="field">
+            <label for="alert-type">Type</label>
+            <select id="alert-type" name="type" bind:value={alertFormType}>
+              <option value="duration">Duration</option>
+              <option value="failure_rate">Failure rate</option>
+              <option value="consecutive_failures">Consecutive failures</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="alert-comparison">Operator</label>
+            <select id="alert-comparison" name="comparison" bind:value={alertFormComparison}>
+              <option value="gt">greater than</option>
+              <option value="gte">greater or equal</option>
+              <option value="lt">less than</option>
+              <option value="lte">less or equal</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="alert-threshold">Threshold</label>
+            <input id="alert-threshold" type="number" name="threshold" bind:value={alertFormThreshold} required
+                   placeholder={alertFormType === 'duration' ? 'ms' : alertFormType === 'failure_rate' ? '0-100%' : 'count'} />
+          </div>
+          <button type="submit" disabled={!alertFormTaskID}>Create</button>
+        </div>
+      </form>
+    {/if}
+    {#if data.alertRules.length === 0 && data.widgetAlertRules.length === 0}
+      <div class="empty" style="padding: var(--space-4) 0;">No alert rules configured for this project's tasks.</div>
+    {:else}
+      {#each data.alertRules as rule (rule.id)}
+        <div class="alert-row">
+          <div class="alert-info">
+            <span class="alert-task-name">{rule.task_name}</span>
+            <span class="alert-desc">{rule.type} {rule.comparison} {rule.threshold}{rule.type === 'failure_rate' ? '%' : rule.type === 'duration' ? 'ms' : ''}</span>
+          </div>
+          <div class="alert-actions">
+            {#if rule.last_triggered_at}
+              <span class="dim" style="font-size: 0.75rem;"><TimeAgo value={rule.last_triggered_at} /></span>
+            {/if}
+            <form method="POST" action="?/toggleAlertRule" class="inline-form">
+              <input type="hidden" name="rule_id" value={rule.id} />
+              <button type="submit" class="ghost" style="font-size: 0.75rem;"
+                      title={rule.enabled ? 'Disable rule' : 'Enable rule'}>
+                {rule.enabled ? 'Enabled' : 'Disabled'}
+              </button>
+            </form>
+            <form method="POST" action="?/deleteAlertRule" class="inline-form">
+              <input type="hidden" name="rule_id" value={rule.id} />
+              <button type="submit" class="ghost danger" style="font-size: 0.75rem;">Delete</button>
+            </form>
+          </div>
+        </div>
+      {/each}
+    {/if}
+  </Panel>
+{/snippet}
+
+{#snippet panelImpactRadar()}
+  {#if data.impactRadar && data.impactRadar.tasks.length > 0}
+    <Panel title="Impact radar">
+      {#snippet actions()}
+        {#if data.impactRadar && data.impactRadar.unmapped_tasks > 0}
+          <span class="dim" style="font-size: 0.75rem;">{data.impactRadar.unmapped_tasks} unmapped</span>
+        {/if}
+      {/snippet}
+      {#each data.impactRadar.tasks as t (t.task_id)}
+        <div class="impact-row">
+          <StatusPill status={t.last_status === 'succeeded' ? 'succeeded' : t.last_status === 'failed' ? 'failed' : 'pending'} size="sm" />
+          <span class="impact-name">{t.task_name}</span>
+          <div class="impact-patterns">
+            {#each t.patterns.slice(0, 3) as p}
+              <Badge variant="muted" size="sm">{p}</Badge>
+            {/each}
+            {#if t.patterns.length > 3}
+              <span class="dim" style="font-size: 0.6875rem;">+{t.patterns.length - 3}</span>
+            {/if}
+          </div>
+        </div>
+      {/each}
+    </Panel>
+  {/if}
+{/snippet}
+
+{#snippet panelDependencyTree()}
+  {#if data.dependencyTree && (data.dependencyTree.upstream.length > 0 || data.dependencyTree.downstream.length > 0)}
+    <Panel title="Dependency tree">
+      {#if data.dependencyTree.upstream.length > 0}
+        <div class="dep-section">
+          <span class="dep-heading">Upstream ({data.dependencyTree.upstream.length})</span>
+          {#each data.dependencyTree.upstream as d (d.project_id)}
+            <a href={`/projects/${d.project_id}`} class="dep-row">
+              <span class="dep-name">{d.project_name}</span>
+              <Badge variant="muted" size="sm">{d.dep_type}</Badge>
+            </a>
+          {/each}
+        </div>
+      {/if}
+      {#if data.dependencyTree.downstream.length > 0}
+        <div class="dep-section">
+          <span class="dep-heading">Downstream ({data.dependencyTree.downstream.length})</span>
+          {#each data.dependencyTree.downstream as d (d.project_id)}
+            <a href={`/projects/${d.project_id}`} class="dep-row">
+              <span class="dep-name">{d.project_name}</span>
+              <Badge variant="muted" size="sm">{d.dep_type}</Badge>
+            </a>
+          {/each}
+        </div>
+      {/if}
+    </Panel>
+  {/if}
+{/snippet}
+
+{#snippet panelLiveRun()}
+  {#if data.liveRun}
+    <Panel title="Live run">
+      <div class="live-run-header">
+        <StatusPill status={data.liveRun.run.status === 'running' ? 'running' : 'queued'} size="sm" />
+        <a href={`/runs/${data.liveRun.run.id}`} class="live-run-name">{data.liveRun.run.task_name}</a>
+        <span class="dim" style="font-size: 0.75rem;"><TimeAgo value={data.liveRun.run.started_at} /></span>
+      </div>
+      {#if data.liveRun.log_tail}
+        <pre class="live-log-tail">{data.liveRun.log_tail}</pre>
+      {/if}
+    </Panel>
+  {/if}
+{/snippet}
+
 {#snippet renderPanel(key: PanelKey)}
   {#if key === 'tasks'}{@render panelTasks()}
   {:else if key === 'recent-runs'}{@render panelRecentRuns()}
@@ -1563,6 +2526,13 @@
   {:else if key === 'pipelines'}{@render panelPipelines()}
   {:else if key === 'pipeline-configs'}{@render panelPipelineConfigs()}
   {:else if key === 'compose'}{@render panelCompose()}
+  {:else if key === 'blame-timeline'}{@render panelBlameTimeline()}
+  {:else if key === 'monorepo'}{@render panelMonorepo()}
+  {:else if key === 'previews'}{@render panelPreviews()}
+  {:else if key === 'alert-rules'}{@render panelAlertRules()}
+  {:else if key === 'impact-radar'}{@render panelImpactRadar()}
+  {:else if key === 'dependency-tree'}{@render panelDependencyTree()}
+  {:else if key === 'live-run'}{@render panelLiveRun()}
   {/if}
 {/snippet}
 
@@ -1782,6 +2752,143 @@
     <div class="modal-actions">
       <button type="button" class="ghost" onclick={() => (concurrencyModal = null)}>Cancel</button>
       <button type="button" onclick={submitConcurrency}>Save</button>
+    </div>
+  {/if}
+</Modal>
+
+<!-- Blame detail modal -->
+<Modal open={blameDetailModal !== null} title={blameDetailModal ? `Commit ${blameDetailModal.sha.slice(0, 8)}` : ''} width={640} onClose={() => blameDetailModal = null}>
+  {#if blameDetailModal}
+    {#if blameDetailModal.loading}
+      <div style="color: var(--text-dim); font-style: italic; padding: var(--space-3) 0;">Loading commit details...</div>
+    {:else if blameDetailModal.error}
+      <p class="modal-error">{blameDetailModal.error}</p>
+    {:else if blameDetailModal.commit}
+      <div class="row"><span class="label">SHA</span><span class="value">{blameDetailModal.commit.sha}</span></div>
+      <div class="row"><span class="label">Author</span><span class="value commit-msg">{blameDetailModal.commit.author} &lt;{blameDetailModal.commit.author_email}&gt;</span></div>
+      <div class="row"><span class="label">Date</span><span class="value">{new Date(blameDetailModal.commit.committed_at).toLocaleString()}</span></div>
+      <div class="row"><span class="label">Message</span><span class="value commit-msg">{blameDetailModal.commit.message}</span></div>
+      <div class="row"><span class="label">Changes</span><span class="value">{blameDetailModal.commit.files_changed} files, <span class="ins">+{blameDetailModal.commit.insertions}</span> <span class="del">-{blameDetailModal.commit.deletions}</span></span></div>
+      {#if blameDetailModal.runs.length > 0}
+        <h3 style="margin: var(--space-4) 0 var(--space-2) 0; font-size: 0.875rem; color: var(--text-muted);">Associated runs ({blameDetailModal.runs.length})</h3>
+        {#each blameDetailModal.runs as r (r.id)}
+          <a href={`/runs/${r.id}`} class="run-row" style="padding: var(--space-1) 0;">
+            <StatusPill status={r.status} size="sm" />
+            <span class="run-meta">{formatDuration(r.started_at, r.finished_at)}</span>
+            <span class="run-meta">{r.started_at ? new Date(r.started_at).toLocaleString() : '--'}</span>
+          </a>
+        {/each}
+      {:else}
+        <p style="color: var(--text-dim); font-size: 0.875rem; margin-top: var(--space-3);">No runs associated with this commit.</p>
+      {/if}
+    {/if}
+    <div class="modal-actions" style="margin-top: var(--space-4);">
+      <button type="button" class="ghost" onclick={() => (blameDetailModal = null)}>Close</button>
+    </div>
+  {/if}
+</Modal>
+
+<!-- Package detail modal -->
+<Modal open={packageDetailModal !== null} title={packageDetailModal?.pkg ? packageDetailModal.pkg.name : 'Package detail'} width={560} onClose={() => packageDetailModal = null}>
+  {#if packageDetailModal}
+    {#if packageDetailModal.loading}
+      <div style="color: var(--text-dim); font-style: italic; padding: var(--space-3) 0;">Loading package...</div>
+    {:else if packageDetailModal.error}
+      <p class="modal-error">{packageDetailModal.error}</p>
+    {:else if packageDetailModal.pkg}
+      <div class="row"><span class="label">Path</span><span class="value">{packageDetailModal.pkg.path}</span></div>
+      <div class="row"><span class="label">Type</span><span class="value"><Badge variant={pkgTypeBadgeVariant(packageDetailModal.pkg.pkg_type)} size="sm">{packageDetailModal.pkg.pkg_type}</Badge></span></div>
+      <h3 style="margin: var(--space-4) 0 var(--space-2) 0; font-size: 0.875rem; color: var(--text-muted);">Scoped tasks ({packageDetailModal.scopes.length})</h3>
+      {#if packageDetailModal.scopes.length > 0}
+        {#each packageDetailModal.scopes as scope (scope.id)}
+          <div class="scope-row">
+            <span class="scope-name">{scope.task_name}</span>
+            <button type="button" class="ghost danger" style="font-size: 0.75rem;"
+                    onclick={() => removeTaskScope(scope.id)}>Remove</button>
+          </div>
+        {/each}
+      {:else}
+        <p style="color: var(--text-dim); font-size: 0.875rem;">No tasks scoped to this package.</p>
+      {/if}
+      {#if data.tasks.length > 0}
+        {@const scopedIDs = new Set(packageDetailModal.scopes.map((s) => s.task_id))}
+        {@const availableTasks = data.tasks.filter((t) => !scopedIDs.has(t.id))}
+        {#if availableTasks.length > 0}
+          <div style="margin-top: var(--space-3); border-top: 1px solid var(--border); padding-top: var(--space-3);">
+            <span style="font-size: 0.8125rem; color: var(--text-muted);">Add task scope:</span>
+            <div class="scope-add-list">
+              {#each availableTasks.slice(0, 10) as t (t.id)}
+                <button type="button" class="ghost" style="font-size: 0.75rem;"
+                        onclick={() => addTaskScope(packageDetailModal?.id ?? '', t.id)}>+ {t.name}</button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      {/if}
+    {/if}
+    <div class="modal-actions" style="margin-top: var(--space-4);">
+      <button type="button" class="ghost" onclick={() => (packageDetailModal = null)}>Close</button>
+    </div>
+  {/if}
+</Modal>
+
+<!-- Task metrics modal -->
+<Modal open={metricsModal !== null} title={metricsModal ? `Metrics: ${metricsModal.taskName}` : ''} width={640} onClose={() => metricsModal = null}>
+  {#if metricsModal}
+    {#if metricsModal.loading}
+      <div style="color: var(--text-dim); font-style: italic; padding: var(--space-3) 0;">Loading metrics...</div>
+    {:else if metricsModal.error}
+      <p class="modal-error">{metricsModal.error}</p>
+    {:else if metricsModal.metrics}
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-num">{formatMs(metricsModal.metrics.p50_ms)}</div>
+          <div class="metric-label">p50</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-num">{formatMs(metricsModal.metrics.p95_ms)}</div>
+          <div class="metric-label">p95</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-num">{formatMs(metricsModal.metrics.p99_ms)}</div>
+          <div class="metric-label">p99</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-num">{metricsModal.metrics.total_runs.toLocaleString()}</div>
+          <div class="metric-label">Total runs</div>
+        </div>
+      </div>
+      <div class="success-rate-bar" style="margin-top: var(--space-4);">
+        <div class="success-rate-label">
+          <span>Success rate</span>
+          <span class="success-rate-pct">{(metricsModal.metrics.success_rate * 100).toFixed(1)}%</span>
+        </div>
+        <div class="rate-track">
+          <div class="rate-fill" style="width: {metricsModal.metrics.success_rate * 100}%;"></div>
+        </div>
+        <span style="font-size: 0.75rem; color: var(--text-dim);">{metricsModal.metrics.last_30d_runs} runs in last 30 days</span>
+      </div>
+      {#if metricsModal.trends.length > 0}
+        <h3 style="margin: var(--space-4) 0 var(--space-2) 0; font-size: 0.875rem; color: var(--text-muted);">Daily trend (last 30 days)</h3>
+        {@const trendMax = Math.max(...metricsModal.trends.map((t) => t.count), 1)}
+        <div class="trend-chart">
+          {#each metricsModal.trends as day (day.date)}
+            <div class="trend-bar-group" title="{day.date}: {day.count} runs ({day.passed}p/{day.failed}f) avg {formatMs(day.avg_ms)}">
+              <div class="trend-bar">
+                {#if day.passed > 0}
+                  <div class="trend-pass" style="height: {(day.passed / trendMax) * 100}%;"></div>
+                {/if}
+                {#if day.failed > 0}
+                  <div class="trend-fail" style="height: {(day.failed / trendMax) * 100}%;"></div>
+                {/if}
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    {/if}
+    <div class="modal-actions" style="margin-top: var(--space-4);">
+      <button type="button" class="ghost" onclick={() => (metricsModal = null)}>Close</button>
     </div>
   {/if}
 </Modal>

@@ -41,6 +41,9 @@ type Config struct {
 	OIDCClientID     string
 	OIDCClientSecret string
 	OIDCProviderName string
+
+	TLSCertFile string
+	TLSKeyFile  string
 }
 
 func (c *Config) OIDCConfigured() bool {
@@ -75,6 +78,9 @@ func Load() (*Config, error) {
 		OIDCClientID:     os.Getenv("WORKEND_OIDC_CLIENT_ID"),
 		OIDCClientSecret: os.Getenv("WORKEND_OIDC_CLIENT_SECRET"),
 		OIDCProviderName: getEnv("WORKEND_OIDC_PROVIDER_NAME", "SSO"),
+
+		TLSCertFile: os.Getenv("WORKEND_TLS_CERT_FILE"),
+		TLSKeyFile:  os.Getenv("WORKEND_TLS_KEY_FILE"),
 	}
 
 	if cfg.DatabaseURL == "" {

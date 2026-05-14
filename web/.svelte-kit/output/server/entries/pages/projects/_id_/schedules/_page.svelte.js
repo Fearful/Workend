@@ -4,11 +4,14 @@ import { B as Badge } from "../../../../../chunks/Badge.js";
 import { E as EmptyState } from "../../../../../chunks/EmptyState.js";
 import { F as FlashMessage } from "../../../../../chunks/FlashMessage.js";
 import { M as Modal } from "../../../../../chunks/Modal.js";
+import { S as SectionHeader } from "../../../../../chunks/SectionHeader.js";
+import { T as TimeAgo } from "../../../../../chunks/TimeAgo.js";
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
     let { data, form } = $$props;
     let deleteModal = null;
-    $$renderer2.push(`<h2 class="section-title svelte-1crrz5y">Schedules</h2> `);
+    SectionHeader($$renderer2, { title: "Schedules" });
+    $$renderer2.push(`<!----> `);
     Panel($$renderer2, {
       title: "Existing schedules",
       children: ($$renderer3) => {
@@ -41,7 +44,9 @@ function _page($$renderer, $$props) {
                 }
               });
             }
-            $$renderer3.push(`<!--]--> <span class="muted svelte-1crrz5y">next: ${escape_html(s.next_run_at ? new Date(s.next_run_at).toLocaleString() : "—")}</span> <form method="POST" action="?/toggle" class="inline-form"><input type="hidden" name="id"${attr("value", s.id)}/> <button type="submit" class="ghost">${escape_html(s.enabled ? "Pause" : "Resume")}</button></form> <button type="button" class="ghost">Delete</button></div>`);
+            $$renderer3.push(`<!--]--> <span class="muted svelte-1crrz5y">next: `);
+            TimeAgo($$renderer3, { value: s.next_run_at });
+            $$renderer3.push(`<!----></span> <form method="POST" action="?/toggle" class="inline-form"><input type="hidden" name="id"${attr("value", s.id)}/> <button type="submit" class="ghost">${escape_html(s.enabled ? "Pause" : "Resume")}</button></form> <button type="button" class="ghost">Delete</button></div>`);
           }
           $$renderer3.push(`<!--]-->`);
         }

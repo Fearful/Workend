@@ -5,12 +5,31 @@ const load = async ({ params, locals, cookies }) => {
   if (!locals.user) throw redirect(303, "/login");
   const cookie = cookies.get(SESSION_COOKIE);
   const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : void 0;
-  const [wsResp, projResp, membersResp, activityResp, issuesResp] = await Promise.all([
-    apiFetch(`/api/workspaces/${params.id}`, { cookie: cookieHeader }),
-    apiFetch(`/api/workspaces/${params.id}/projects`, { cookie: cookieHeader }),
-    apiFetch(`/api/workspaces/${params.id}/members`, { cookie: cookieHeader }),
-    apiFetch(`/api/workspaces/${params.id}/activity?limit=30`, { cookie: cookieHeader }),
-    apiFetch(`/api/workspaces/${params.id}/recent-issues`, { cookie: cookieHeader })
+  const wid = params.id;
+  const [
+    wsResp,
+    projResp,
+    membersResp,
+    activityResp,
+    issuesResp,
+    gridResp,
+    teamResp,
+    depsResp,
+    secretsSumResp,
+    pipeResp,
+    sandboxResp
+  ] = await Promise.all([
+    apiFetch(`/api/workspaces/${wid}`, { cookie: cookieHeader }),
+    apiFetch(`/api/workspaces/${wid}/projects`, { cookie: cookieHeader }),
+    apiFetch(`/api/workspaces/${wid}/members`, { cookie: cookieHeader }),
+    apiFetch(`/api/workspaces/${wid}/activity?limit=30`, { cookie: cookieHeader }),
+    apiFetch(`/api/workspaces/${wid}/recent-issues`, { cookie: cookieHeader }),
+    apiFetch(`/api/widgets/workspace/${wid}/project-grid`, { cookie: cookieHeader }),
+    apiFetch(`/api/widgets/workspace/${wid}/team-presence`, { cookie: cookieHeader }),
+    apiFetch(`/api/widgets/workspace/${wid}/dependency-overview`, { cookie: cookieHeader }),
+    apiFetch(`/api/widgets/workspace/${wid}/secrets-summary`, { cookie: cookieHeader }),
+    apiFetch(`/api/widgets/workspace/${wid}/pipeline-board`, { cookie: cookieHeader }),
+    apiFetch(`/api/widgets/workspace/${wid}/sandbox-preview-rack`, { cookie: cookieHeader })
   ]);
   if (wsResp.status === 404) throw error(404, "workspace not found");
   if (!wsResp.ok || !wsResp.data) throw error(500, wsResp.error || "failed to load workspace");
@@ -20,7 +39,13 @@ const load = async ({ params, locals, cookies }) => {
     projectsError: projResp.ok ? null : projResp.error || "failed to load projects",
     members: membersResp.ok ? membersResp.data ?? [] : [],
     activity: activityResp.ok ? activityResp.data ?? [] : [],
-    recentIssues: issuesResp.ok ? issuesResp.data ?? [] : []
+    recentIssues: issuesResp.ok ? issuesResp.data ?? [] : [],
+    projectGrid: gridResp.ok ? gridResp.data?.projects ?? [] : [],
+    teamPresence: teamResp.ok ? teamResp.data?.members ?? [] : [],
+    depOverview: depsResp.ok ? depsResp.data ?? null : null,
+    secretsSummary: secretsSumResp.ok ? secretsSumResp.data ?? null : null,
+    pipelineBoard: pipeResp.ok ? pipeResp.data ?? null : null,
+    sandboxItems: sandboxResp.ok ? sandboxResp.data?.items ?? [] : []
   };
 };
 const actions = {

@@ -28,7 +28,7 @@ type Dagger struct {
 func (Dagger) Name() string { return "dagger" }
 
 // daggerCLIImage matches versions.md. Bump in lock-step with the engine.
-const daggerCLIImage = "registry.dagger.io/cli:v0.13.7"
+const daggerCLIImage = "registry.dagger.io/cli:v0.20.5"
 
 func (d Dagger) Detect(ctx context.Context, repoPath string) ([]Task, error) {
 	if _, err := os.Stat(filepath.Join(repoPath, "dagger.json")); err != nil {

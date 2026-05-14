@@ -1389,7 +1389,7 @@ func (h *Handlers) GetLog(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	_, _ = w.Write(data)
+	_, _ = w.Write([]byte(MaskSecrets(string(data))))
 }
 
 // ListByProject returns runs for a project, most recent first.

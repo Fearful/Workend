@@ -339,3 +339,93 @@ func hostOnly(hostPort string) string {
 	}
 	return hostPort
 }
+
+// SendQuotaAlert fires storage-quota notifications to all of a user's
+// enabled notification configs. Called by quota.CheckAndAlert.
+func (d *Dispatcher) SendQuotaAlert(ctx context.Context, userID uuid.UUID, pct int, usedBytes, quotaBytes int64) {
+	if d == nil {
+		return
+	}
+
+	usedGB := float64(usedBytes) / (1024 * 1024 * 1024)
+	quotaGB := float64(quotaBytes) / (1024 * 1024 * 1024)
+
+	rows, err := d.Pool.Query(ctx, `
+		SELECT id, kind, target FROM notification_configs
+		WHERE user_id = $1 AND enabled = true
+	`, userID)
+	if err != nil {
+		d.Logger.Warn("quota alert: load configs", "err", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var c Config
+		if err := rows.Scan(&c.ID, &c.Kind, &c.Target); err != nil {
+			continue
+		}
+		msg := fmt.Sprintf("Storage quota %d%% reached (%.1f / %.1f GB). Free up space or increase your quota.", pct, usedGB, quotaGB)
+		if err := d.sendQuotaMsg(ctx, c, pct, msg); err != nil {
+			d.Logger.Warn("quota alert: send failed", "kind", c.Kind, "err", err)
+		}
+	}
+}
+
+func (d *Dispatcher) sendQuotaMsg(ctx context.Context, c Config, pct int, msg string) error {
+	switch c.Kind {
+	case KindWebhook:
+		body, _ := json.Marshal(map[string]any{
+			"type":    "quota_alert",
+			"percent": pct,
+			"message": msg,
+		})
+		return d.postJSON(ctx, c.Target, body)
+	case KindSlack:
+		emoji := ":warning:"
+		if pct >= 95 {
+			emoji = ":rotating_light:"
+		}
+		body, _ := json.Marshal(map[string]any{
+			"text": fmt.Sprintf("%s *[Workend]* %s", emoji, msg),
+		})
+		return d.postJSON(ctx, c.Target, body)
+	case KindDiscord:
+		color := 0xf59e0b
+		if pct >= 95 {
+			color = 0xef4444
+		}
+		body, _ := json.Marshal(map[string]any{
+			"embeds": []map[string]any{{
+				"title":       "Storage Quota Alert",
+				"description": msg,
+				"color":       color,
+			}},
+		})
+		return d.postJSON(ctx, c.Target, body)
+	case KindTeams:
+		color := "f59e0b"
+		if pct >= 95 {
+			color = "ef4444"
+		}
+		body, _ := json.Marshal(map[string]any{
+			"@type":      "MessageCard",
+			"@context":   "https://schema.org/extensions",
+			"themeColor": color,
+			"summary":    "Storage Quota Alert",
+			"title":      "Storage Quota Alert",
+			"text":       msg,
+		})
+		return d.postJSON(ctx, c.Target, body)
+	case KindEmail:
+		if d.SMTP == nil || d.SMTP.Host == "" {
+			return errors.New("SMTP not configured")
+		}
+		subject := fmt.Sprintf("[Workend] Storage quota %d%% reached", pct)
+		raw := []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s\n",
+			d.SMTP.From, c.Target, subject, msg))
+		auth := smtp.PlainAuth("", d.SMTP.Username, d.SMTP.Password, hostOnly(d.SMTP.Host))
+		return smtp.SendMail(d.SMTP.Host, auth, d.SMTP.From, []string{c.Target}, raw)
+	}
+	return nil
+}

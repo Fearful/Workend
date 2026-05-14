@@ -1,9 +1,12 @@
-import { e as escape_html, c as ensure_array_like } from "../../../chunks/renderer.js";
+import { e as escape_html, c as ensure_array_like, a as attr } from "../../../chunks/renderer.js";
 import { P as PageHeader } from "../../../chunks/PageHeader.js";
+import { P as Panel } from "../../../chunks/Panel.js";
 import { B as Badge } from "../../../chunks/Badge.js";
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
-    let { data } = $$props;
+    let { data, form } = $$props;
+    let exportFrom = "";
+    let exportTo = "";
     PageHeader($$renderer2, { title: "Admin" });
     $$renderer2.push(`<!----> <h2 class="svelte-1jef3w8">Users (${escape_html(data.users.length)})</h2> <div class="table-wrapper svelte-1jef3w8"><table class="svelte-1jef3w8"><thead><tr><th class="svelte-1jef3w8">Display name</th><th class="svelte-1jef3w8">Email</th><th class="svelte-1jef3w8">Created</th><th class="svelte-1jef3w8">Workspaces</th><th class="svelte-1jef3w8">Projects</th><th class="svelte-1jef3w8">Runs</th></tr></thead><tbody><!--[-->`);
     const each_array = ensure_array_like(data.users);
@@ -30,7 +33,28 @@ function _page($$renderer, $$props) {
       let e = each_array_1[$$index_1];
       $$renderer2.push(`<tr class="svelte-1jef3w8"><td class="muted svelte-1jef3w8">${escape_html(new Date(e.occurred_at).toLocaleString())}</td><td class="mono svelte-1jef3w8">${escape_html(e.actor_email || "—")}</td><td class="mono svelte-1jef3w8">${escape_html(e.action)}</td><td class="muted svelte-1jef3w8">${escape_html(e.target_kind ? `${e.target_kind}:${(e.target_id ?? "").slice(0, 8)}` : "—")}</td><td class="muted svelte-1jef3w8">${escape_html(e.ip || "—")}</td></tr>`);
     }
-    $$renderer2.push(`<!--]--></tbody></table></div>`);
+    $$renderer2.push(`<!--]--></tbody></table></div> `);
+    Panel($$renderer2, {
+      title: "Audit log management",
+      children: ($$renderer3) => {
+        $$renderer3.push(`<p class="hint svelte-1jef3w8">Export audit log entries as CSV or configure automatic retention cleanup.</p> <div class="export-row svelte-1jef3w8"><div class="field svelte-1jef3w8"><label for="export-from" class="svelte-1jef3w8">From</label> <input id="export-from" type="date"${attr("value", exportFrom)}/></div> <div class="field svelte-1jef3w8"><label for="export-to" class="svelte-1jef3w8">To</label> <input id="export-to" type="date"${attr("value", exportTo)}/></div> <button type="button"${attr("disabled", !exportFrom, true)} class="ghost">${escape_html("Export CSV")}</button></div> <div class="retention-row svelte-1jef3w8"><form method="POST" action="?/setRetention" style="display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap;"><div class="field svelte-1jef3w8"><label for="retention-days">Retention period (days)</label> <input id="retention-days" name="days" type="number" min="1" max="3650" placeholder="e.g. 90, 180, 365" style="width: 180px;"/></div> <button type="submit" class="ghost">Set retention</button></form></div> `);
+        if (form?.retentionError) {
+          $$renderer3.push("<!--[0-->");
+          $$renderer3.push(`<p class="form-error svelte-1jef3w8">${escape_html(form.retentionError)}</p>`);
+        } else {
+          $$renderer3.push("<!--[-1-->");
+        }
+        $$renderer3.push(`<!--]--> `);
+        if (form?.retentionSet) {
+          $$renderer3.push("<!--[0-->");
+          $$renderer3.push(`<p class="form-success svelte-1jef3w8">Retention set to ${escape_html(form.retentionDays)} days.</p>`);
+        } else {
+          $$renderer3.push("<!--[-1-->");
+        }
+        $$renderer3.push(`<!--]-->`);
+      }
+    });
+    $$renderer2.push(`<!---->`);
   });
 }
 export {

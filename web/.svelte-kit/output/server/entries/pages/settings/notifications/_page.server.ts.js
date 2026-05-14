@@ -4,10 +4,24 @@ const SESSION_COOKIE = "workend_session";
 const load = async ({ locals, cookies }) => {
   if (!locals.user) throw redirect(303, "/login");
   const cookie = cookies.get(SESSION_COOKIE);
-  const result = await apiFetch("/api/me/notifications", {
-    cookie: cookie ? `${SESSION_COOKIE}=${cookie}` : void 0
-  });
-  return { notifications: result.ok ? result.data ?? [] : [] };
+  const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : void 0;
+  const [notifsResp, subsResp, wsResp] = await Promise.all([
+    apiFetch("/api/me/notifications", { cookie: cookieHeader }),
+    apiFetch("/api/me/notification-subscriptions", { cookie: cookieHeader }),
+    apiFetch("/api/workspaces", { cookie: cookieHeader })
+  ]);
+  const workspaces = wsResp.ok ? wsResp.data ?? [] : [];
+  const projectsByWS = {};
+  await Promise.all(workspaces.map(async (w) => {
+    const r = await apiFetch(`/api/workspaces/${w.id}/projects`, { cookie: cookieHeader });
+    if (r.ok && r.data) projectsByWS[w.id] = r.data;
+  }));
+  return {
+    notifications: notifsResp.ok ? notifsResp.data ?? [] : [],
+    subscriptions: subsResp.ok ? subsResp.data ?? [] : [],
+    workspaces,
+    projectsByWS
+  };
 };
 const actions = {
   create: async ({ request, cookies }) => {
@@ -44,6 +58,31 @@ const actions = {
     });
     if (!result.ok) return fail(result.status, { error: result.error || "test send failed" });
     return { tested: true };
+  },
+  subscribe: async ({ request, cookies }) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const data = await request.formData();
+    const config_id = String(data.get("config_id") || "");
+    const scope_type = String(data.get("scope_type") || "global");
+    const scope_id = String(data.get("scope_id") || "").trim();
+    const severity = String(data.get("severity") || "failures");
+    const result = await apiFetch("/api/me/notification-subscriptions", {
+      method: "POST",
+      body: { config_id, scope_type, scope_id, severity },
+      cookie: cookie ? `${SESSION_COOKIE}=${cookie}` : void 0
+    });
+    if (!result.ok) return fail(result.status, { error: result.error || "subscribe failed" });
+    return { subscribed: true };
+  },
+  unsubscribe: async ({ request, cookies }) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const id = String((await request.formData()).get("id") || "");
+    const result = await apiFetch(`/api/me/notification-subscriptions/${id}`, {
+      method: "DELETE",
+      cookie: cookie ? `${SESSION_COOKIE}=${cookie}` : void 0
+    });
+    if (!result.ok) return fail(result.status, { error: result.error || "unsubscribe failed" });
+    return { unsubscribed: true };
   }
 };
 export {

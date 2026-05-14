@@ -23,17 +23,19 @@ type Handlers struct {
 }
 
 type RemotePipelineRun struct {
-	ID            uuid.UUID  `json:"id"`
-	ProjectID     uuid.UUID  `json:"project_id"`
-	ProviderRunID string     `json:"provider_run_id"`
-	Status        string     `json:"status"`
-	Branch        *string    `json:"branch"`
-	CommitSHA     *string    `json:"commit_sha"`
-	WorkflowName  *string    `json:"workflow_name"`
-	HTMLURL       *string    `json:"html_url"`
-	StartedAt     *time.Time `json:"started_at"`
-	FinishedAt    *time.Time `json:"finished_at"`
-	FetchedAt     time.Time  `json:"fetched_at"`
+	ID             uuid.UUID  `json:"id"`
+	ProjectID      uuid.UUID  `json:"project_id"`
+	ProviderRunID  string     `json:"provider_run_id"`
+	Status         string     `json:"status"`
+	Branch         *string    `json:"branch"`
+	CommitSHA      *string    `json:"commit_sha"`
+	WorkflowName   *string    `json:"workflow_name"`
+	HTMLURL        *string    `json:"html_url"`
+	StartedAt      *time.Time `json:"started_at"`
+	FinishedAt     *time.Time `json:"finished_at"`
+	FetchedAt      time.Time  `json:"fetched_at"`
+	CallbackURL    string     `json:"callback_url,omitempty"`
+	CallbackSentAt *time.Time `json:"callback_sent_at,omitempty"`
 }
 
 // GET /api/projects/{id}/remote-pipelines
@@ -66,7 +68,8 @@ func (h *Handlers) ListByProject(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.Pool.Query(r.Context(), `
 		SELECT id, project_id, provider_run_id, status, branch, commit_sha,
-		       workflow_name, html_url, started_at, finished_at, fetched_at
+		       workflow_name, html_url, started_at, finished_at, fetched_at,
+		       callback_url, callback_sent_at
 		FROM remote_pipeline_runs
 		WHERE project_id = $1
 		ORDER BY started_at DESC NULLS LAST
@@ -83,7 +86,8 @@ func (h *Handlers) ListByProject(w http.ResponseWriter, r *http.Request) {
 		var r RemotePipelineRun
 		if err := rows.Scan(&r.ID, &r.ProjectID, &r.ProviderRunID, &r.Status,
 			&r.Branch, &r.CommitSHA, &r.WorkflowName, &r.HTMLURL,
-			&r.StartedAt, &r.FinishedAt, &r.FetchedAt); err != nil {
+			&r.StartedAt, &r.FinishedAt, &r.FetchedAt,
+			&r.CallbackURL, &r.CallbackSentAt); err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}

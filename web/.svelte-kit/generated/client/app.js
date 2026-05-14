@@ -30,7 +30,15 @@ export const nodes = [
 	() => import('./nodes/26'),
 	() => import('./nodes/27'),
 	() => import('./nodes/28'),
-	() => import('./nodes/29')
+	() => import('./nodes/29'),
+	() => import('./nodes/30'),
+	() => import('./nodes/31'),
+	() => import('./nodes/32'),
+	() => import('./nodes/33'),
+	() => import('./nodes/34'),
+	() => import('./nodes/35'),
+	() => import('./nodes/36'),
+	() => import('./nodes/37')
 ];
 
 export const server_loads = [0,2];
@@ -47,22 +55,30 @@ export const dictionary = {
 		"/otel": [11],
 		"/pipeline-runs/[id]": [~12],
 		"/projects/[id]": [~13,[2]],
-		"/projects/[id]/board": [~14,[2]],
-		"/projects/[id]/branches": [~15,[2]],
-		"/projects/[id]/images": [~16,[2]],
-		"/projects/[id]/pipelines": [~17,[2]],
-		"/projects/[id]/runs": [~18,[2]],
-		"/projects/[id]/schedules": [~19,[2]],
-		"/projects/[id]/trends": [~20,[2]],
-		"/runs/[id]": [~21],
-		"/runs/[id]/compare/[other]": [~22],
-		"/settings": [~23],
-		"/settings/notifications": [~24],
-		"/signup": [~25],
-		"/workspaces/new": [~29],
-		"/workspaces/[id]": [~26],
-		"/workspaces/[id]/dashboard": [~27],
-		"/workspaces/[id]/projects/new": [~28]
+		"/projects/[id]/blame": [~14,[2]],
+		"/projects/[id]/board": [~15,[2]],
+		"/projects/[id]/branches": [~16,[2]],
+		"/projects/[id]/images": [~17,[2]],
+		"/projects/[id]/monorepo": [~18,[2]],
+		"/projects/[id]/pipelines": [~19,[2]],
+		"/projects/[id]/previews": [~20,[2]],
+		"/projects/[id]/runs": [~21,[2]],
+		"/projects/[id]/schedules": [~22,[2]],
+		"/projects/[id]/trends": [~23,[2]],
+		"/runs/[id]": [~24],
+		"/runs/[id]/compare/[other]": [~25],
+		"/sandboxes": [~26],
+		"/sandboxes/[id]": [~27],
+		"/settings": [~28],
+		"/settings/notifications": [~29],
+		"/signup": [~30],
+		"/workspaces/new": [~37],
+		"/workspaces/[id]": [~31],
+		"/workspaces/[id]/activity": [~32],
+		"/workspaces/[id]/dashboard": [~33],
+		"/workspaces/[id]/projects/new": [~34],
+		"/workspaces/[id]/roles": [~35],
+		"/workspaces/[id]/secrets": [~36]
 	};
 
 export const hooks = {

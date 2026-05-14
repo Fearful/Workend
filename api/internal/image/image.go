@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"workend/api/internal/auth"
+	"workend/api/internal/secret"
 )
 
 // decodeSummary unmarshals the vuln_summary JSONB into a VulnSummaryView.
@@ -63,6 +64,7 @@ type VulnSummaryRow struct {
 
 type Handlers struct {
 	Pool *pgxpool.Pool
+	Box  *secret.Box // nil when WORKEND_TOKEN_KEY is unset
 }
 
 // GET /api/projects/:project_id/images

@@ -41,10 +41,12 @@ type Pipeline struct {
 }
 
 type Step struct {
-	Position   int       `json:"position"`
-	TaskID     uuid.UUID `json:"task_id"`
-	TaskName   string    `json:"task_name,omitempty"`
-	TaskSource string    `json:"task_source,omitempty"`
+	Position      int       `json:"position"`
+	TaskID        uuid.UUID `json:"task_id"`
+	TaskName      string    `json:"task_name,omitempty"`
+	TaskSource    string    `json:"task_source,omitempty"`
+	ConditionExpr string    `json:"condition_expr,omitempty"`
+	OnFailure     string    `json:"on_failure,omitempty"`
 }
 
 type PipelineRun struct {
@@ -123,15 +125,41 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name    string      `json:"name"`
 		TaskIDs []uuid.UUID `json:"task_ids"`
+		Steps   []struct {
+			TaskID        uuid.UUID `json:"task_id"`
+			ConditionExpr string    `json:"condition_expr"`
+			OnFailure     string    `json:"on_failure"`
+		} `json:"steps"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 	body.Name = strings.TrimSpace(body.Name)
-	if body.Name == "" || len(body.TaskIDs) == 0 {
-		http.Error(w, "name and task_ids required", http.StatusBadRequest)
+
+	// Support both legacy task_ids array and the richer steps array.
+	if len(body.Steps) == 0 && len(body.TaskIDs) > 0 {
+		for _, tid := range body.TaskIDs {
+			body.Steps = append(body.Steps, struct {
+				TaskID        uuid.UUID `json:"task_id"`
+				ConditionExpr string    `json:"condition_expr"`
+				OnFailure     string    `json:"on_failure"`
+			}{TaskID: tid})
+		}
+	}
+	if body.Name == "" || len(body.Steps) == 0 {
+		http.Error(w, "name and task_ids (or steps) required", http.StatusBadRequest)
 		return
+	}
+	for _, s := range body.Steps {
+		if len(s.ConditionExpr) > 200 {
+			http.Error(w, "condition_expr too long (max 200)", http.StatusBadRequest)
+			return
+		}
+		if s.OnFailure != "" && s.OnFailure != "stop" && s.OnFailure != "continue" && s.OnFailure != "skip_remaining" {
+			http.Error(w, "on_failure must be stop, continue, or skip_remaining", http.StatusBadRequest)
+			return
+		}
 	}
 
 	tx, err := h.Pool.Begin(r.Context())
@@ -154,10 +182,15 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	for i, tid := range body.TaskIDs {
+	for i, s := range body.Steps {
+		onFailure := s.OnFailure
+		if onFailure == "" {
+			onFailure = "stop"
+		}
 		if _, err := tx.Exec(r.Context(), `
-			INSERT INTO pipeline_steps (pipeline_id, position, task_id) VALUES ($1, $2, $3)
-		`, p.ID, i, tid); err != nil {
+			INSERT INTO pipeline_steps (pipeline_id, position, task_id, condition_expr, on_failure)
+			VALUES ($1, $2, $3, $4, $5)
+		`, p.ID, i, s.TaskID, s.ConditionExpr, onFailure); err != nil {
 			http.Error(w, "step insert failed: "+err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -233,8 +266,13 @@ func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
 
 // driveSteps fires step `i`; on completion either advances to step `i+1`
 // (success) or marks the pipeline_run failed (failure). Runs in the
-// background; callers don't wait.
+// background; callers don't wait. prevSuccess tracks whether the previous
+// step succeeded (true for the very first step).
 func (h *Handlers) driveSteps(ownerID uuid.UUID, prID uuid.UUID, steps []Step, i int) {
+	h.driveStepsWithStatus(ownerID, prID, steps, i, true)
+}
+
+func (h *Handlers) driveStepsWithStatus(ownerID uuid.UUID, prID uuid.UUID, steps []Step, i int, prevSuccess bool) {
 	if i >= len(steps) {
 		h.markPipelineRun(prID, "succeeded")
 		return
@@ -244,20 +282,55 @@ func (h *Handlers) driveSteps(ownerID uuid.UUID, prID uuid.UUID, steps []Step, i
 		h.markPipelineRun(prID, "failed")
 		return
 	}
+
+	// Evaluate the step's condition expression.
+	if !shouldRunStep(step.ConditionExpr, prevSuccess) {
+		// Skip this step and move to the next, preserving prevSuccess.
+		h.driveStepsWithStatus(ownerID, prID, steps, i+1, prevSuccess)
+		return
+	}
+
 	bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	onFailure := step.OnFailure
+	if onFailure == "" {
+		onFailure = "stop"
+	}
 	err := h.Runner.EnqueuePipelineStep(bgCtx, step.TaskID, ownerID, prID, step.Position, func(success bool) {
 		if !success {
-			h.markPipelineRun(prID, "failed")
+			switch onFailure {
+			case "continue":
+				h.driveStepsWithStatus(ownerID, prID, steps, i+1, false)
+			case "skip_remaining":
+				h.markPipelineRun(prID, "failed")
+			default: // "stop"
+				h.markPipelineRun(prID, "failed")
+			}
 			return
 		}
-		h.driveSteps(ownerID, prID, steps, i+1)
+		h.driveStepsWithStatus(ownerID, prID, steps, i+1, true)
 	})
 	if err != nil {
 		if h.Logger != nil {
 			h.Logger.Warn("pipeline step enqueue failed", "step", i, "err", err)
 		}
 		h.markPipelineRun(prID, "failed")
+	}
+}
+
+// shouldRunStep evaluates a step's condition expression against the outcome
+// of the previous step. An empty expression or "always" means unconditional.
+func shouldRunStep(expr string, prevSuccess bool) bool {
+	switch strings.TrimSpace(strings.ToLower(expr)) {
+	case "", "always":
+		return true
+	case "on_success":
+		return prevSuccess
+	case "on_failure":
+		return !prevSuccess
+	default:
+		// Unknown expressions default to always-run for forward compatibility.
+		return true
 	}
 }
 
@@ -324,7 +397,7 @@ func (h *Handlers) GetRun(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) loadSteps(ctx context.Context, pipelineID uuid.UUID) ([]Step, error) {
 	rows, err := h.Pool.Query(ctx, `
-		SELECT s.position, s.task_id, t.name, t.source
+		SELECT s.position, s.task_id, t.name, t.source, s.condition_expr, s.on_failure
 		FROM pipeline_steps s
 		JOIN tasks t ON t.id = s.task_id
 		WHERE s.pipeline_id = $1
@@ -337,7 +410,7 @@ func (h *Handlers) loadSteps(ctx context.Context, pipelineID uuid.UUID) ([]Step,
 	var steps []Step
 	for rows.Next() {
 		var s Step
-		if err := rows.Scan(&s.Position, &s.TaskID, &s.TaskName, &s.TaskSource); err != nil {
+		if err := rows.Scan(&s.Position, &s.TaskID, &s.TaskName, &s.TaskSource, &s.ConditionExpr, &s.OnFailure); err != nil {
 			return nil, err
 		}
 		steps = append(steps, s)

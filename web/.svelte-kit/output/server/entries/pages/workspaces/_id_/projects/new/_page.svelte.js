@@ -5,7 +5,7 @@ import "../../../../../../chunks/utils.js";
 import "@sveltejs/kit/internal/server";
 import "../../../../../../chunks/root.js";
 import "../../../../../../chunks/state.svelte.js";
-import { f as formatRelative } from "../../../../../../chunks/utils2.js";
+import { b as formatRelative } from "../../../../../../chunks/utils2.js";
 import { B as Breadcrumb } from "../../../../../../chunks/Breadcrumb.js";
 import { P as PageHeader } from "../../../../../../chunks/PageHeader.js";
 import { F as FlashMessage } from "../../../../../../chunks/FlashMessage.js";

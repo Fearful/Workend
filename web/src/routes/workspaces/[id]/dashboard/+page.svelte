@@ -26,6 +26,30 @@
     for (const b of data.summary?.daily_runs ?? []) if (b.total > m) m = b.total;
     return Math.max(1, m);
   });
+
+  function fmtBytes(b: number): string {
+    if (b === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.min(Math.floor(Math.log(b) / Math.log(1024)), units.length - 1);
+    const val = b / Math.pow(1024, i);
+    return `${val < 10 ? val.toFixed(1) : Math.round(val)} ${units[i]}`;
+  }
+
+  let quotaPct = $derived(
+    data.summary?.storage?.quota_bytes
+      ? Math.min(100, Math.round((data.summary.storage.used_bytes / data.summary.storage.quota_bytes) * 100))
+      : 0
+  );
+
+  let diskPct = $derived(
+    data.summary?.storage?.disk?.total_bytes
+      ? Math.round((data.summary.storage.disk.used_bytes / data.summary.storage.disk.total_bytes) * 100)
+      : 0
+  );
+
+  let maxProjectBytes = $derived(
+    Math.max(1, ...((data.summary?.storage?.projects ?? []).map((p: { bytes: number }) => p.bytes)))
+  );
 </script>
 
 <style>
@@ -35,12 +59,18 @@
     font-weight: var(--fw-semibold);
     letter-spacing: -0.02em;
   }
+  .role-tag {
+    color: var(--text-dim);
+    font-size: var(--fs-xs);
+    margin-left: var(--space-2);
+    font-weight: var(--fw-regular);
+  }
   .header-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-3);
-    margin-bottom: var(--space-2);
+    margin-bottom: var(--space-4);
     flex-wrap: wrap;
   }
   .ws-tabs {
@@ -197,6 +227,134 @@
   .runs-bar-ok   { background: var(--status-success-fg); }
   .runs-bar-bad  { background: var(--status-danger-fg); }
   .runs-bar-amount { font-family: var(--font-mono); text-align: right; }
+
+  .storage-section { margin-bottom: var(--space-5); }
+  .storage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: var(--space-3);
+  }
+  .storage-header h2 {
+    margin: 0;
+    font-size: var(--fs-md);
+    font-weight: var(--fw-semibold);
+  }
+  .storage-header .storage-total {
+    font-size: var(--fs-sm);
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+  .quota-bar-wrap {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-3);
+  }
+  .quota-label-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--fs-sm);
+    margin-bottom: var(--space-2);
+  }
+  .quota-label-row .used { font-family: var(--font-mono); }
+  .quota-label-row .quota { color: var(--text-dim); font-family: var(--font-mono); }
+  .quota-track {
+    height: 12px;
+    background: var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .quota-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.3s ease;
+  }
+  .quota-fill.ok   { background: var(--accent); }
+  .quota-fill.warn { background: var(--status-warning-fg); }
+  .quota-fill.crit { background: var(--status-danger-fg); }
+  .quota-pct {
+    text-align: right;
+    font-size: var(--fs-xs);
+    color: var(--text-dim);
+    margin-top: 0.25rem;
+    font-family: var(--font-mono);
+  }
+
+  .proj-storage-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .proj-storage-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-3);
+    align-items: center;
+    font-size: var(--fs-sm);
+  }
+  .proj-storage-row .proj-name {
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .proj-storage-row .proj-size {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .proj-bar-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    grid-column: 1 / -1;
+    margin-top: -2px;
+  }
+  .proj-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    opacity: 0.7;
+  }
+
+  .disk-info {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-5);
+  }
+  .disk-info h3 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+    color: var(--text);
+  }
+  .disk-stats {
+    display: flex;
+    gap: var(--space-4);
+    font-size: var(--fs-xs);
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    margin-bottom: var(--space-2);
+  }
+  .disk-track {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .disk-fill {
+    height: 100%;
+    border-radius: 4px;
+  }
+  .disk-fill.ok   { background: var(--status-success-fg); }
+  .disk-fill.warn { background: var(--status-warning-fg); }
+  .disk-fill.crit { background: var(--status-danger-fg); }
 </style>
 
 <Breadcrumb segments={[
@@ -206,13 +364,16 @@
 ]} />
 
 <div class="header-row">
-  <h1>{data.workspace.name}</h1>
+  <h1>{data.workspace.name} <span class="role-tag">{data.workspace.my_role}</span></h1>
 </div>
 
-<div class="ws-tabs">
+<nav class="ws-tabs" aria-label="Workspace sections">
   <a class="ws-tab" href={`/workspaces/${data.workspace.id}`}>Overview</a>
   <a class="ws-tab active" href={`/workspaces/${data.workspace.id}/dashboard`}>Dashboard</a>
-</div>
+  <a class="ws-tab" href={`/workspaces/${data.workspace.id}/activity`}>Activity</a>
+  <a class="ws-tab" href={`/workspaces/${data.workspace.id}/secrets`}>Secrets</a>
+  <a class="ws-tab" href={`/workspaces/${data.workspace.id}/roles`}>Roles</a>
+</nav>
 
 <div class="controls">
   <span>Window:</span>
@@ -242,13 +403,67 @@
       <div class="stat-label">Failed</div>
     </div>
     <div class="stat">
-      <div class="stat-num"><span class={data.summary.totals.success_rate >= 0.9 ? 'ok' : 'bad'}>{Math.round((data.summary.totals.success_rate || 0) * 100)}%</span></div>
+      <div class="stat-num"><span class={data.summary.totals.runs_in_window === 0 ? '' : (data.summary.totals.success_rate >= 0.9 ? 'ok' : 'bad')}>{data.summary.totals.runs_in_window === 0 ? '—' : `${Math.round((data.summary.totals.success_rate || 0) * 100)}%`}</span></div>
       <div class="stat-label">Success rate</div>
     </div>
     <div class="stat">
       <div class="stat-num">{data.summary.totals.active_now}</div>
       <div class="stat-label">Active now</div>
     </div>
+  </div>
+
+  <div class="storage-section">
+    <div class="storage-header">
+      <h2>Storage</h2>
+      <span class="storage-total">{fmtBytes(data.summary.storage.used_bytes)} / {fmtBytes(data.summary.storage.quota_bytes)}</span>
+    </div>
+
+    <div class="quota-bar-wrap">
+      <div class="quota-label-row">
+        <span class="used">{fmtBytes(data.summary.storage.used_bytes)} used</span>
+        <span class="quota">{fmtBytes(data.summary.storage.quota_bytes)} quota</span>
+      </div>
+      <div class="quota-track">
+        <div
+          class="quota-fill {quotaPct >= 95 ? 'crit' : quotaPct >= 80 ? 'warn' : 'ok'}"
+          style="width: {quotaPct}%;"
+        ></div>
+      </div>
+      <div class="quota-pct">{quotaPct}%</div>
+
+      {#if data.summary.storage.projects.length > 0}
+        <div class="proj-storage-list" style="margin-top: var(--space-3);">
+          {#each data.summary.storage.projects as p (p.project_id)}
+            <div class="proj-storage-row">
+              <span class="proj-name">{p.project_name}</span>
+              <span class="proj-size">{fmtBytes(p.bytes)}</span>
+              <div class="proj-bar-track">
+                <div class="proj-bar-fill" style="width: {(p.bytes / maxProjectBytes) * 100}%;"></div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div style="color: var(--text-dim); font-size: var(--fs-sm); margin-top: var(--space-3);">No projects yet.</div>
+      {/if}
+    </div>
+
+    {#if data.summary.storage.disk.total_bytes > 0}
+      <div class="disk-info">
+        <h3>Instance disk</h3>
+        <div class="disk-stats">
+          <span>{fmtBytes(data.summary.storage.disk.used_bytes)} used</span>
+          <span>{fmtBytes(data.summary.storage.disk.available_bytes)} free</span>
+          <span>{fmtBytes(data.summary.storage.disk.total_bytes)} total</span>
+        </div>
+        <div class="disk-track">
+          <div
+            class="disk-fill {diskPct >= 90 ? 'crit' : diskPct >= 75 ? 'warn' : 'ok'}"
+            style="width: {diskPct}%;"
+          ></div>
+        </div>
+      </div>
+    {/if}
   </div>
 
   <div class="grid-2">

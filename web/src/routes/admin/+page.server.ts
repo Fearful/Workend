@@ -1,5 +1,5 @@
-import { error, redirect } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+import { error, fail, redirect } from '@sveltejs/kit';
+import type { PageServerLoad, Actions } from './$types';
 import { apiFetch } from '$lib/api';
 
 const SESSION_COOKIE = 'workend_session';
@@ -43,4 +43,23 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
     users: usersResult.ok ? (usersResult.data ?? []) : [],
     audit: auditResult.ok ? (auditResult.data ?? []) : []
   };
+};
+
+export const actions: Actions = {
+  setRetention: async ({ request, cookies }) => {
+    const cookie = cookies.get(SESSION_COOKIE);
+    const cookieHeader = cookie ? `${SESSION_COOKIE}=${cookie}` : undefined;
+    const data = await request.formData();
+    const days = parseInt(String(data.get('days') || ''), 10);
+    if (isNaN(days) || days < 1) {
+      return fail(400, { retentionError: 'A valid number of days is required (minimum 1)' });
+    }
+    const result = await apiFetch('/api/admin/audit-log/retention', {
+      method: 'POST',
+      body: { days },
+      cookie: cookieHeader
+    });
+    if (!result.ok) return fail(result.status, { retentionError: result.error || 'failed to set retention' });
+    return { retentionSet: true, retentionDays: days };
+  }
 };

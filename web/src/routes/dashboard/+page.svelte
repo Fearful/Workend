@@ -1,6 +1,7 @@
 <script lang="ts">
   import { statusColor, formatRelative, freshnessClass } from '$lib/utils';
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import Panel from '$lib/components/Panel.svelte';
   import StatusPill from '$lib/components/StatusPill.svelte';
   import Badge from '$lib/components/Badge.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
@@ -27,9 +28,401 @@
     };
   });
 
+  const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => {
+    if (i === 0) return '12a';
+    if (i < 12) return `${i}a`;
+    if (i === 12) return '12p';
+    return `${i - 12}p`;
+  });
+
+  let heatmapGrid = $derived.by(() => {
+    const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    let max = 0;
+    for (const b of data.heatmap) {
+      const row = b.day_of_week;
+      const col = b.hour;
+      if (row >= 0 && row < 7 && col >= 0 && col < 24) {
+        grid[row][col] = b.failures;
+        if (b.failures > max) max = b.failures;
+      }
+    }
+    return { grid, max };
+  });
+
+  let queueItemCount = $derived(
+    data.myQueue.pending_approvals.length +
+    data.myQueue.expiring_sandboxes.length +
+    (data.myQueue.unread_mentions > 0 ? 1 : 0)
+  );
+
+  let hasWidgets = $derived(
+    data.runPulse.length > 0 ||
+    data.heatmap.length > 0 ||
+    queueItemCount > 0 ||
+    data.velocity.this_week.runs > 0 ||
+    data.velocity.last_week.runs > 0 ||
+    data.sandboxes.length > 0 ||
+    data.quota.length > 0
+  );
+
+  function formatMs(ms: number): string {
+    if (ms <= 0) return '0s';
+    const sec = Math.round(ms / 1000);
+    if (sec < 60) return `${sec}s`;
+    return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+  }
+
+  function passRate(passed: number, total: number): string {
+    if (total === 0) return '—';
+    return `${Math.round((passed / total) * 100)}%`;
+  }
+
+  function deltaClass(delta: number, higherIsBetter: boolean): string {
+    if (delta === 0) return '';
+    const positive = delta > 0;
+    return (positive === higherIsBetter) ? 'delta-good' : 'delta-bad';
+  }
+
+  function deltaArrow(delta: number): string {
+    if (delta > 0) return '↑';
+    if (delta < 0) return '↓';
+    return '';
+  }
+
 </script>
 
 <style>
+  /* ── Widgets section ── */
+  .widgets-section {
+    margin-bottom: var(--space-6);
+  }
+
+  .widgets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: var(--space-4);
+  }
+
+  .widget-heatmap {
+    grid-column: span 2;
+  }
+
+  @media (max-width: 767px) {
+    .widgets-grid {
+      grid-template-columns: 1fr;
+    }
+    .widget-heatmap {
+      grid-column: span 1;
+    }
+  }
+
+  /* ── Run Pulse ── */
+  .pulse-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .pulse-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+    color: inherit;
+    text-decoration: none;
+    transition: background 120ms ease;
+  }
+  .pulse-row:hover {
+    background: rgba(107, 114, 128, 0.08);
+    text-decoration: none;
+  }
+
+  .pulse-task {
+    font-family: var(--font-mono);
+    font-weight: var(--fw-medium);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pulse-meta {
+    color: var(--text-dim);
+    font-size: var(--fs-xs);
+    white-space: nowrap;
+  }
+
+  /* ── Sprint Velocity ── */
+  .velocity-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .vel-header,
+  .vel-row {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr 1fr 1fr;
+    gap: var(--space-2);
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .vel-header {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    padding-bottom: 0.375rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .vel-row {
+    font-size: var(--fs-sm);
+    border-radius: var(--radius-md);
+    transition: background 120ms ease;
+  }
+  .vel-row:hover {
+    background: rgba(107, 114, 128, 0.05);
+  }
+
+  .vel-label {
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+  }
+
+  .vel-val {
+    font-family: var(--font-mono);
+    text-align: right;
+  }
+
+  .vel-col {
+    text-align: right;
+  }
+
+  .vel-delta {
+    font-weight: var(--fw-semibold);
+  }
+
+  .delta-good {
+    color: var(--success);
+  }
+
+  .delta-bad {
+    color: var(--danger-text);
+  }
+
+  /* ── My Queue ── */
+  .queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+    color: inherit;
+    text-decoration: none;
+    transition: background 120ms ease;
+  }
+  a.queue-item:hover {
+    background: rgba(107, 114, 128, 0.08);
+    text-decoration: none;
+  }
+
+  .queue-task {
+    font-family: var(--font-mono);
+    font-weight: var(--fw-medium);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .queue-meta {
+    color: var(--text-dim);
+    font-size: var(--fs-xs);
+    white-space: nowrap;
+  }
+
+  .queue-urgent {
+    color: var(--warning);
+    font-weight: var(--fw-semibold);
+  }
+
+  /* ── Failure Heatmap ── */
+  .heatmap-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .heatmap-grid {
+    display: grid;
+    grid-template-columns: 2rem repeat(24, 1fr);
+    grid-template-rows: auto repeat(7, 1fr);
+    gap: 2px;
+    min-width: 480px;
+  }
+
+  .heatmap-corner {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .heatmap-hour-label {
+    font-size: 0.5625rem;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1;
+    padding-bottom: 0.25rem;
+  }
+
+  .heatmap-day-label {
+    font-size: 0.625rem;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    padding-right: 0.25rem;
+    line-height: 1;
+  }
+
+  .heatmap-cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background: rgba(239, 68, 68, calc(0.08 + var(--intensity) * 0.82));
+    transition: opacity 120ms ease;
+    min-width: 12px;
+    min-height: 12px;
+  }
+  .heatmap-cell:hover {
+    opacity: 0.75;
+    outline: 1px solid var(--text-dim);
+  }
+
+  .heatmap-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    justify-content: flex-end;
+    margin-top: var(--space-2);
+    padding-right: 0.25rem;
+  }
+
+  .heatmap-legend-label {
+    font-size: 0.5625rem;
+    color: var(--text-dim);
+  }
+
+  .heatmap-legend-cell {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background: rgba(239, 68, 68, calc(0.08 + var(--intensity) * 0.82));
+  }
+
+  /* ── Sandbox Status ── */
+  .sandbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .sandbox-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+    transition: background 120ms ease;
+  }
+  .sandbox-row:hover {
+    background: rgba(107, 114, 128, 0.05);
+  }
+
+  .sandbox-branch {
+    font-family: var(--font-mono);
+    font-weight: var(--fw-medium);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sandbox-project {
+    color: var(--text-dim);
+    font-size: var(--fs-xs);
+    white-space: nowrap;
+  }
+
+  /* ── Quota Meter ── */
+  .quota-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .quota-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .quota-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .quota-name {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+  }
+
+  .quota-stats {
+    font-size: var(--fs-xs);
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  .quota-bar-track {
+    height: 6px;
+    background: rgba(107, 114, 128, 0.15);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+
+  .quota-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: var(--radius-full);
+    transition: width 300ms ease;
+  }
+  .quota-bar-fill.quota-warn {
+    background: var(--warning);
+  }
+  .quota-bar-fill.quota-danger {
+    background: var(--danger-text);
+  }
+
+  .quota-pct {
+    font-size: var(--fs-xs);
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  /* ── Existing layout ── */
   .layout {
     display: grid;
     grid-template-columns: 1fr;
@@ -228,6 +621,194 @@
 </style>
 
 <PageHeader title="Dashboard" />
+
+{#if hasWidgets}
+<div class="widgets-section">
+  <div class="widgets-grid">
+
+    {#if data.runPulse.length > 0}
+      <div class="widget widget-run-pulse">
+        <Panel title="Run Pulse" padding="compact">
+          <div class="pulse-list">
+            {#each data.runPulse as run (run.id)}
+              <a href={`/runs/${run.id}`} class="pulse-row">
+                <StatusPill status={run.status} size="sm" />
+                <span class="pulse-task">{run.task_name}</span>
+                <span class="pulse-meta">{run.project_name}</span>
+                <span class="pulse-meta">{run.workspace_name}</span>
+                <TimeAgo value={run.started_at} />
+              </a>
+            {/each}
+          </div>
+        </Panel>
+      </div>
+    {/if}
+
+    {#if data.velocity.this_week.runs > 0 || data.velocity.last_week.runs > 0}
+      <div class="widget widget-velocity">
+        <Panel title="Sprint Velocity" padding="compact">
+          <div class="velocity-table">
+            <div class="vel-header">
+              <span class="vel-label"></span>
+              <span class="vel-col">This week</span>
+              <span class="vel-col">Last week</span>
+              <span class="vel-col">Delta</span>
+            </div>
+            <div class="vel-row">
+              <span class="vel-label">Runs</span>
+              <span class="vel-val">{data.velocity.this_week.runs}</span>
+              <span class="vel-val">{data.velocity.last_week.runs}</span>
+              <span class="vel-val vel-delta {deltaClass(data.velocity.deltas.runs, true)}">
+                {deltaArrow(data.velocity.deltas.runs)} {Math.abs(data.velocity.deltas.runs)}
+              </span>
+            </div>
+            <div class="vel-row">
+              <span class="vel-label">Pass rate</span>
+              <span class="vel-val">{passRate(data.velocity.this_week.passed, data.velocity.this_week.runs)}</span>
+              <span class="vel-val">{passRate(data.velocity.last_week.passed, data.velocity.last_week.runs)}</span>
+              <span class="vel-val vel-delta {deltaClass(data.velocity.deltas.passed, true)}">
+                {deltaArrow(data.velocity.deltas.passed)} {Math.abs(data.velocity.deltas.passed)}
+              </span>
+            </div>
+            <div class="vel-row">
+              <span class="vel-label">Failed</span>
+              <span class="vel-val">{data.velocity.this_week.failed}</span>
+              <span class="vel-val">{data.velocity.last_week.failed}</span>
+              <span class="vel-val vel-delta {deltaClass(data.velocity.deltas.failed, false)}">
+                {deltaArrow(data.velocity.deltas.failed)} {Math.abs(data.velocity.deltas.failed)}
+              </span>
+            </div>
+            <div class="vel-row">
+              <span class="vel-label">Avg duration</span>
+              <span class="vel-val">{formatMs(data.velocity.this_week.avg_duration_ms)}</span>
+              <span class="vel-val">{formatMs(data.velocity.last_week.avg_duration_ms)}</span>
+              <span class="vel-val vel-delta {deltaClass(data.velocity.deltas.avg_duration_ms, false)}">
+                {deltaArrow(data.velocity.deltas.avg_duration_ms)} {formatMs(Math.abs(data.velocity.deltas.avg_duration_ms))}
+              </span>
+            </div>
+          </div>
+        </Panel>
+      </div>
+    {/if}
+
+    {#if queueItemCount > 0}
+      <div class="widget widget-queue">
+        <Panel title="My Queue" padding="compact">
+          <div class="queue-list">
+            {#each data.myQueue.pending_approvals as approval (approval.run_id)}
+              <a href={`/runs/${approval.run_id}`} class="queue-item">
+                <Badge variant="accent" size="sm">approval</Badge>
+                <span class="queue-task">{approval.task_name}</span>
+                <span class="queue-meta">{approval.project_name}</span>
+                <TimeAgo value={approval.created_at} />
+              </a>
+            {/each}
+            {#each data.myQueue.expiring_sandboxes as sb (sb.sandbox_id)}
+              <div class="queue-item">
+                <Badge variant="warning" size="sm">expiring</Badge>
+                <span class="queue-task">{sb.branch}</span>
+                <span class="queue-meta queue-urgent">{sb.minutes_left}m left</span>
+              </div>
+            {/each}
+            {#if data.myQueue.unread_mentions > 0}
+              <div class="queue-item">
+                <Badge variant="info" size="sm">mentions</Badge>
+                <span class="queue-task">{data.myQueue.unread_mentions} unread</span>
+              </div>
+            {/if}
+          </div>
+        </Panel>
+      </div>
+    {/if}
+
+    {#if data.heatmap.length > 0}
+      <div class="widget widget-heatmap">
+        <Panel title="Failure Heatmap" padding="compact">
+          <div class="heatmap-wrap">
+            <div class="heatmap-grid">
+              <div class="heatmap-corner"></div>
+              {#each HOUR_LABELS as h, i}
+                {#if i % 3 === 0}
+                  <span class="heatmap-hour-label">{h}</span>
+                {:else}
+                  <span class="heatmap-hour-label"></span>
+                {/if}
+              {/each}
+              {#each heatmapGrid.grid as dayRow, dayIdx}
+                <span class="heatmap-day-label">{DAY_LABELS[dayIdx]}</span>
+                {#each dayRow as count, hourIdx}
+                  <div
+                    class="heatmap-cell"
+                    style="--intensity: {heatmapGrid.max > 0 ? count / heatmapGrid.max : 0}"
+                    title="{DAY_LABELS[dayIdx]} {HOUR_LABELS[hourIdx]}: {count} failure{count !== 1 ? 's' : ''}"
+                  ></div>
+                {/each}
+              {/each}
+            </div>
+            <div class="heatmap-legend">
+              <span class="heatmap-legend-label">Less</span>
+              <div class="heatmap-legend-cell" style="--intensity: 0"></div>
+              <div class="heatmap-legend-cell" style="--intensity: 0.25"></div>
+              <div class="heatmap-legend-cell" style="--intensity: 0.5"></div>
+              <div class="heatmap-legend-cell" style="--intensity: 0.75"></div>
+              <div class="heatmap-legend-cell" style="--intensity: 1"></div>
+              <span class="heatmap-legend-label">More</span>
+            </div>
+          </div>
+        </Panel>
+      </div>
+    {/if}
+
+    {#if data.sandboxes.length > 0}
+      <div class="widget widget-sandboxes">
+        <Panel title="Sandbox Status" padding="compact">
+          <div class="sandbox-list">
+            {#each data.sandboxes as sb (sb.id)}
+              <div class="sandbox-row">
+                <StatusPill status={sb.status} size="sm" />
+                <span class="sandbox-branch">{sb.branch}</span>
+                <span class="sandbox-project">{sb.project_name}</span>
+                {#if sb.minutes_left <= 10}
+                  <Badge variant="danger" size="sm">{sb.minutes_left}m left</Badge>
+                {:else if sb.minutes_left <= 30}
+                  <Badge variant="warning" size="sm">{sb.minutes_left}m left</Badge>
+                {:else}
+                  <Badge variant="muted" size="sm">{sb.minutes_left}m left</Badge>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        </Panel>
+      </div>
+    {/if}
+
+    {#if data.quota.length > 0}
+      <div class="widget widget-quota">
+        <Panel title="Quota Meter" padding="compact">
+          <div class="quota-list">
+            {#each data.quota as ws (ws.workspace_id)}
+              <div class="quota-row">
+                <div class="quota-head">
+                  <span class="quota-name">{ws.workspace_name}</span>
+                  <span class="quota-stats">{ws.projects} projects &middot; {ws.runs_30d} runs / 30d</span>
+                </div>
+                <div class="quota-bar-track">
+                  <div
+                    class="quota-bar-fill {ws.usage_percent >= 90 ? 'quota-danger' : ws.usage_percent >= 70 ? 'quota-warn' : ''}"
+                    style="width: {Math.min(ws.usage_percent, 100)}%"
+                  ></div>
+                </div>
+                <span class="quota-pct">{Math.round(ws.usage_percent)}%</span>
+              </div>
+            {/each}
+          </div>
+        </Panel>
+      </div>
+    {/if}
+
+  </div>
+</div>
+{/if}
 
 <div class="layout">
   <div class="main-content">

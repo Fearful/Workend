@@ -1,6 +1,7 @@
 import { c as ensure_array_like, a as attr, f as attr_style, s as stringify, e as escape_html, d as derived } from "../../../../../chunks/renderer.js";
 import { P as Panel } from "../../../../../chunks/Panel.js";
 import { E as EmptyState } from "../../../../../chunks/EmptyState.js";
+import { S as SectionHeader } from "../../../../../chunks/SectionHeader.js";
 function _page($$renderer, $$props) {
   $$renderer.component(($$renderer2) => {
     let { data } = $$props;
@@ -132,7 +133,8 @@ function _page($$renderer, $$props) {
       }
       window.location.search = p.toString();
     }
-    $$renderer2.push(`<h2 class="section-title svelte-tdlzdu">Run duration trends</h2> `);
+    SectionHeader($$renderer2, { title: "Run duration trends" });
+    $$renderer2.push(`<!----> `);
     if (heatmap().cols.length > 0) {
       $$renderer2.push("<!--[0-->");
       $$renderer2.push(`<section class="panel heatmap-section svelte-tdlzdu"><div class="heatmap-header svelte-tdlzdu">Activity (last 53 weeks)</div> <div class="heatmap-grid svelte-tdlzdu"><!--[-->`);

@@ -218,7 +218,7 @@ func gitRecentFiles(ctx context.Context, repo string, limit int) []RecentFile {
 			continue
 		}
 		// Header lines look like "<sha> <iso>".
-		if len(line) >= 40 && line[40] == ' ' {
+		if len(line) > 40 && line[40] == ' ' {
 			currentDate = strings.TrimSpace(line[40:])
 			continue
 		}

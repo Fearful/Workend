@@ -25,10 +25,12 @@ import (
 // Credential is what the API returns to the UI. The token plaintext is
 // never echoed back; only the host, label, and metadata.
 type Credential struct {
-	ID        uuid.UUID `json:"id"`
-	Host      string    `json:"host"`
-	Label     string    `json:"label"`
-	CreatedAt time.Time `json:"created_at"`
+	ID            uuid.UUID  `json:"id"`
+	Host          string     `json:"host"`
+	Label         string     `json:"label"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ExpiresAt     *time.Time `json:"expires_at"`
+	LastRotatedAt *time.Time `json:"last_rotated_at"`
 }
 
 type Handlers struct {
@@ -41,7 +43,7 @@ type Handlers struct {
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	uid := auth.UserID(r.Context())
 	rows, err := h.Pool.Query(r.Context(), `
-		SELECT id, host, label, created_at
+		SELECT id, host, label, created_at, expires_at, last_rotated_at
 		FROM user_pat_credentials WHERE user_id = $1 ORDER BY created_at DESC
 	`, uid)
 	if err != nil {
@@ -52,7 +54,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	out := []Credential{}
 	for rows.Next() {
 		var c Credential
-		if err := rows.Scan(&c.ID, &c.Host, &c.Label, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Host, &c.Label, &c.CreatedAt, &c.ExpiresAt, &c.LastRotatedAt); err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -74,9 +76,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Host  string `json:"host"`
-		Label string `json:"label"`
-		Token string `json:"token"`
+		Host      string     `json:"host"`
+		Label     string     `json:"label"`
+		Token     string     `json:"token"`
+		ExpiresAt *time.Time `json:"expires_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -106,14 +109,15 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	var c Credential
 	err = h.Pool.QueryRow(r.Context(), `
-		INSERT INTO user_pat_credentials (user_id, host, label, encrypted_token)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO user_pat_credentials (user_id, host, label, encrypted_token, expires_at)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (user_id, host) DO UPDATE
 		SET label           = EXCLUDED.label,
 		    encrypted_token = EXCLUDED.encrypted_token,
+		    expires_at      = EXCLUDED.expires_at,
 		    created_at      = now()
-		RETURNING id, host, label, created_at
-	`, uid, host, req.Label, enc).Scan(&c.ID, &c.Host, &c.Label, &c.CreatedAt)
+		RETURNING id, host, label, created_at, expires_at, last_rotated_at
+	`, uid, host, req.Label, enc, req.ExpiresAt).Scan(&c.ID, &c.Host, &c.Label, &c.CreatedAt, &c.ExpiresAt, &c.LastRotatedAt)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -143,6 +147,43 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// RotateCredential marks a credential as rotated by setting last_rotated_at = now().
+// Optionally updates expires_at from the request body.
+// POST /api/me/pat-credentials/:id/rotate
+func (h *Handlers) RotateCredential(w http.ResponseWriter, r *http.Request) {
+	uid := auth.UserID(r.Context())
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		ExpiresAt *time.Time `json:"expires_at"`
+	}
+	// Body is optional; ignore decode errors for empty bodies.
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	var c Credential
+	err = h.Pool.QueryRow(r.Context(), `
+		UPDATE user_pat_credentials
+		SET last_rotated_at = now(),
+		    expires_at = COALESCE($1, expires_at)
+		WHERE id = $2 AND user_id = $3
+		RETURNING id, host, label, created_at, expires_at, last_rotated_at
+	`, body.ExpiresAt, id, uid).Scan(&c.ID, &c.Host, &c.Label, &c.CreatedAt, &c.ExpiresAt, &c.LastRotatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(c)
 }
 
 // LookupForCloneURL returns the decrypted token for whichever credential
